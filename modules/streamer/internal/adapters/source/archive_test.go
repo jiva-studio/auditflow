@@ -5,9 +5,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
+	"time"
 
 	"assessment/modules/streamer/internal/adapters/reporter"
 	"assessment/modules/streamer/internal/adapters/source"
@@ -289,4 +292,113 @@ func TestTarGzEventSource_ContextCancel(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected context cancelled error, got nil")
 	}
+}
+
+func writeTarHeaderAndData(tw *tar.Writer, name string, data []byte) error {
+	hdr := &tar.Header{
+		Name: name,
+		Mode: 0644,
+		Size: int64(len(data)),
+	}
+	if err := tw.WriteHeader(hdr); err != nil {
+		return err
+	}
+	_, err := tw.Write(data)
+	return err
+}
+
+func generateSyntheticArchive(targetPath string, numSeconds int, eventsPerSec int) error {
+	f, err := os.Create(targetPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	gzw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gzw)
+
+	metaJSON := fmt.Sprintf(`{
+		"schema_version": "1.0.0",
+		"session_id": "sess-stress",
+		"employee_id": "emp-stress",
+		"started_at": "2026-03-10T10:00:00.000Z",
+		"ended_at": "%s",
+		"machine": {"displays": [{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0}]}
+	}`, time.Date(2026, 3, 10, 10, 0, 0, 0, time.UTC).Add(time.Duration(numSeconds)*time.Second).Format(time.RFC3339Nano))
+
+	if err := writeTarHeaderAndData(tw, "session/metadata.json", []byte(metaJSON)); err != nil {
+		return err
+	}
+
+	var winBuf, mouseBuf bytes.Buffer
+	baseTime := time.Date(2026, 3, 10, 10, 0, 0, 0, time.UTC)
+
+	for s := 0; s < numSeconds; s++ {
+		for e := 0; e < eventsPerSec/2; e++ {
+			ts := baseTime.Add(time.Duration(s)*time.Second + time.Duration(e*2)*time.Millisecond)
+			tsStr := ts.Format(time.RFC3339Nano)
+			fmt.Fprintf(&winBuf, `{"ts":"%s","event":"focus_change","window_title":"W%d","process_name":"app.exe","window_rect":[0,0,100,100]}`+"\n", tsStr, s)
+			fmt.Fprintf(&mouseBuf, `{"ts":"%s","event":"click","button":"left","mouse_x":%d,"mouse_y":%d}`+"\n", tsStr, s, e)
+		}
+	}
+
+	if err := writeTarHeaderAndData(tw, "session/windows.jsonl", winBuf.Bytes()); err != nil {
+		return err
+	}
+	if err := writeTarHeaderAndData(tw, "session/mouse.jsonl", mouseBuf.Bytes()); err != nil {
+		return err
+	}
+
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	return gzw.Close()
+}
+
+func TestTarGzEventSource_LargeDataset_MemoryBounded(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "stress_recording.tar.gz")
+	const numSeconds = 200
+	const eventsPerSec = 200 // 40,000 events total
+
+	if err := generateSyntheticArchive(tmpFile, numSeconds, eventsPerSec); err != nil {
+		t.Fatalf("failed to generate synthetic archive: %v", err)
+	}
+
+	runtime.GC()
+	var mBefore runtime.MemStats
+	runtime.ReadMemStats(&mBefore)
+
+	src := source.NewTarGzEventSource(tmpFile, nil)
+	tickCh, errCh, err := src.StreamTicks(context.Background())
+	if err != nil {
+		t.Fatalf("failed to start streaming: %v", err)
+	}
+
+	ticksReceived := 0
+	eventsReceived := 0
+	for tick := range tickCh {
+		ticksReceived++
+		eventsReceived += tick.Len()
+	}
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("stream returned error: %v", err)
+	}
+
+	if ticksReceived != numSeconds {
+		t.Errorf("got %d ticks, want %d", ticksReceived, numSeconds)
+	}
+	if eventsReceived != numSeconds*eventsPerSec {
+		t.Errorf("got %d events, want %d", eventsReceived, numSeconds*eventsPerSec)
+	}
+
+	runtime.GC()
+	var mAfter runtime.MemStats
+	runtime.ReadMemStats(&mAfter)
+
+	// HeapAlloc difference should remain small (well under 20MB)
+	allocDeltaMB := float64(mAfter.HeapAlloc-mBefore.HeapAlloc) / (1024 * 1024)
+	t.Logf("Stress test completed: %d ticks, %d events, HeapAlloc delta: %.2f MB", ticksReceived, eventsReceived, allocDeltaMB)
 }

@@ -5,6 +5,7 @@ import (
 	"archive/tar"
 	"bufio"
 	"compress/gzip"
+	"container/heap"
 	"context"
 	"encoding/json"
 	"errors"
@@ -159,48 +160,39 @@ func mapRawMetadata(raw rawMetadata) (session.Metadata, error) {
 	)
 }
 
-// StreamTicks reads all events, organizes them into 1-second interval TickBatches, and streams them.
+// StreamTicks streams 1-second TickBatches using memory-bounded K-Way Merge across event streams.
 func (s *TarGzEventSource) StreamTicks(ctx context.Context) (<-chan events.TickBatch, <-chan error, error) {
 	meta, err := s.LoadMetadata(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	allEvents, err := s.readAllEvents(ctx)
+	tmpDir, err := os.MkdirTemp("", "streamer-session-*")
 	if err != nil {
+		return nil, nil, fmt.Errorf("create temp extraction dir: %w", err)
+	}
+
+	extractedFiles, err := s.extractJsonlFiles(ctx, tmpDir)
+	if err != nil {
+		_ = os.RemoveAll(tmpDir)
 		return nil, nil, err
 	}
 
-	sort.SliceStable(allEvents, func(i, j int) bool {
-		return allEvents[i].GetTimestamp().Before(allEvents[j].GetTimestamp())
-	})
-
-	batches, err := partitionIntoTicks(meta.TimeRange.Start, meta.TimeRange.End, allEvents)
+	streams, err := s.openEventStreams(extractedFiles)
 	if err != nil {
+		_ = os.RemoveAll(tmpDir)
 		return nil, nil, err
 	}
 
 	tickCh := make(chan events.TickBatch)
 	errCh := make(chan error, 1)
 
-	go func() {
-		defer close(tickCh)
-		defer close(errCh)
-
-		for _, batch := range batches {
-			select {
-			case <-ctx.Done():
-				errCh <- ctx.Err()
-				return
-			case tickCh <- batch:
-			}
-		}
-	}()
+	go s.streamKWayMerge(ctx, meta, streams, tmpDir, tickCh, errCh)
 
 	return tickCh, errCh, nil
 }
 
-func (s *TarGzEventSource) readAllEvents(ctx context.Context) ([]events.Event, error) {
+func (s *TarGzEventSource) extractJsonlFiles(ctx context.Context, targetDir string) ([]string, error) {
 	f, err := os.Open(s.archivePath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrRecordingNotFound, err.Error())
@@ -217,8 +209,8 @@ func (s *TarGzEventSource) readAllEvents(ctx context.Context) ([]events.Event, e
 		_ = gzr.Close()
 	}()
 
-	var allEvents []events.Event
 	tr := tar.NewReader(gzr)
+	var extractedFiles []string
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -233,52 +225,241 @@ func (s *TarGzEventSource) readAllEvents(ctx context.Context) ([]events.Event, e
 			return nil, fmt.Errorf("%w: read tar entry: %s", ErrCorruptArchive, err.Error())
 		}
 
-		baseName := filepath.Base(header.Name)
-		evs, err := s.parseEventFile(baseName, tr)
+		outPath, err := extractTarEntry(tr, header, targetDir)
 		if err != nil {
-			return nil, fmt.Errorf("parse %s: %w", header.Name, err)
+			return nil, err
 		}
-		allEvents = append(allEvents, evs...)
+		if outPath != "" {
+			extractedFiles = append(extractedFiles, outPath)
+		}
 	}
 
-	return allEvents, nil
+	sort.Strings(extractedFiles)
+	return extractedFiles, nil
 }
 
-func (s *TarGzEventSource) parseEventFile(filename string, r io.Reader) ([]events.Event, error) {
-	scanner := bufio.NewScanner(r)
+func extractTarEntry(tr *tar.Reader, header *tar.Header, targetDir string) (string, error) {
+	baseName := filepath.Base(header.Name)
+	if !strings.HasSuffix(baseName, ".jsonl") {
+		return "", nil
+	}
+
+	outPath := filepath.Join(targetDir, baseName)
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return "", fmt.Errorf("create temp event file: %w", err)
+	}
+
+	if _, err := io.Copy(outFile, tr); err != nil {
+		_ = outFile.Close()
+		return "", fmt.Errorf("%w: write temp event file: %s", ErrCorruptArchive, err.Error())
+	}
+	if err := outFile.Close(); err != nil {
+		return "", fmt.Errorf("close temp event file: %w", err)
+	}
+
+	return outPath, nil
+}
+
+func (s *TarGzEventSource) openEventStreams(files []string) ([]*eventStream, error) {
+	var streams []*eventStream
+	for _, file := range files {
+		st, err := newEventStream(file, s.reporter)
+		if err != nil {
+			for _, prev := range streams {
+				prev.close()
+			}
+			return nil, err
+		}
+		streams = append(streams, st)
+	}
+	return streams, nil
+}
+
+type eventStream struct {
+	filename string
+	file     *os.File
+	scanner  *bufio.Scanner
+	currEv   events.Event
+	lineNum  int
+	reporter ports.ErrorReporter
+}
+
+func newEventStream(path string, rep ports.ErrorReporter) (*eventStream, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	base := filepath.Base(path)
+	st := &eventStream{
+		filename: base,
+		file:     f,
+		scanner:  bufio.NewScanner(f),
+		reporter: rep,
+	}
 	const maxScanCapacity = 10 * 1024 * 1024
 	buf := make([]byte, 64*1024)
-	scanner.Buffer(buf, maxScanCapacity)
+	st.scanner.Buffer(buf, maxScanCapacity)
+	if err := st.advance(); err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	return st, nil
+}
 
-	var result []events.Event
-	lineNum := 0
-
-	for scanner.Scan() {
-		lineNum++
-		line := scanner.Bytes()
+func (st *eventStream) advance() error {
+	for st.scanner.Scan() {
+		st.lineNum++
+		line := st.scanner.Bytes()
 		if len(strings.TrimSpace(string(line))) == 0 {
 			continue
 		}
-
-		ev, err := parseEventLine(filename, line)
+		ev, err := parseEventLine(st.filename, line)
 		if err != nil {
-			s.reporter.ReportWarning("malformed event line skipped", map[string]any{
-				"filename": filename,
-				"line":     lineNum,
+			st.reporter.ReportWarning("malformed event line skipped", map[string]any{
+				"filename": st.filename,
+				"line":     st.lineNum,
 				"error":    err.Error(),
 			})
 			continue
 		}
 		if ev != nil {
-			result = append(result, ev)
+			st.currEv = ev
+			return nil
 		}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("%w: scanner error in %s: %s", ErrCorruptArchive, filename, err.Error())
+	if err := st.scanner.Err(); err != nil {
+		return fmt.Errorf("%w: scanner error in %s: %s", ErrCorruptArchive, st.filename, err.Error())
 	}
+	st.currEv = nil
+	return nil
+}
 
-	return result, nil
+func (st *eventStream) close() {
+	if st.file != nil {
+		_ = st.file.Close()
+	}
+}
+
+type streamHeap []*eventStream
+
+func (h streamHeap) Len() int { return len(h) }
+func (h streamHeap) Less(i, j int) bool {
+	ti := h[i].currEv.GetTimestamp()
+	tj := h[j].currEv.GetTimestamp()
+	if !ti.Equal(tj) {
+		return ti.Before(tj)
+	}
+	return h[i].filename < h[j].filename
+}
+func (h streamHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+func (h *streamHeap) Push(x any)   { *h = append(*h, x.(*eventStream)) }
+func (h *streamHeap) Pop() any {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
+
+func advanceMinStream(h *streamHeap) error {
+	minStream := (*h)[0]
+	if err := minStream.advance(); err != nil {
+		return err
+	}
+	if minStream.currEv == nil {
+		heap.Pop(h)
+		minStream.close()
+	} else {
+		heap.Fix(h, 0)
+	}
+	return nil
+}
+
+func collectBatchEvents(ctx context.Context, h *streamHeap, batch *events.TickBatch, currStart, currEnd time.Time) error {
+	for h.Len() > 0 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		minStream := (*h)[0]
+		ts := minStream.currEv.GetTimestamp()
+
+		if ts.Before(currStart) {
+			if err := advanceMinStream(h); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if !ts.Before(currEnd) {
+			break
+		}
+
+		_ = batch.Add(minStream.currEv)
+		if err := advanceMinStream(h); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *TarGzEventSource) streamKWayMerge(
+	ctx context.Context,
+	meta session.Metadata,
+	streams []*eventStream,
+	tmpDir string,
+	tickCh chan<- events.TickBatch,
+	errCh chan<- error,
+) {
+	defer close(tickCh)
+	defer close(errCh)
+	defer func() {
+		for _, st := range streams {
+			st.close()
+		}
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	h := &streamHeap{}
+	for _, st := range streams {
+		if st.currEv != nil {
+			*h = append(*h, st)
+		}
+	}
+	heap.Init(h)
+
+	currStart := meta.TimeRange.Start
+	endedAt := meta.TimeRange.End
+	tickIdx := 0
+
+	for currStart.Before(endedAt) {
+		currEnd := currStart.Add(time.Second)
+		if currEnd.After(endedAt) {
+			currEnd = endedAt
+		}
+
+		batch, err := events.NewTickBatch(tickIdx, currStart, currEnd)
+		if err != nil {
+			errCh <- err
+			return
+		}
+
+		if err := collectBatchEvents(ctx, h, &batch, currStart, currEnd); err != nil {
+			errCh <- err
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			errCh <- ctx.Err()
+			return
+		case tickCh <- batch:
+		}
+
+		currStart = currEnd
+		tickIdx++
+	}
 }
 
 func parseEventLine(filename string, line []byte) (events.Event, error) {
@@ -461,49 +642,4 @@ func mapFilenameToEventType(filename string) events.EventType {
 	default:
 		return events.EventType("unknown")
 	}
-}
-
-func partitionIntoTicks(startedAt, endedAt time.Time, sortedEvents []events.Event) ([]events.TickBatch, error) {
-	if endedAt.Before(startedAt) {
-		return nil, fmt.Errorf("ended_at %v is before started_at %v", endedAt, startedAt)
-	}
-
-	var batches []events.TickBatch
-	currStart := startedAt
-	eventIdx := 0
-	tickIdx := 0
-
-	for currStart.Before(endedAt) {
-		currEnd := currStart.Add(time.Second)
-		if currEnd.After(endedAt) {
-			currEnd = endedAt
-		}
-
-		batch, err := events.NewTickBatch(tickIdx, currStart, currEnd)
-		if err != nil {
-			return nil, err
-		}
-
-		for eventIdx < len(sortedEvents) {
-			ev := sortedEvents[eventIdx]
-			ts := ev.GetTimestamp()
-
-			if ts.Before(currStart) {
-				eventIdx++
-				continue
-			}
-			if !ts.Before(currEnd) {
-				break
-			}
-
-			_ = batch.Add(ev)
-			eventIdx++
-		}
-
-		batches = append(batches, batch)
-		currStart = currEnd
-		tickIdx++
-	}
-
-	return batches, nil
 }
