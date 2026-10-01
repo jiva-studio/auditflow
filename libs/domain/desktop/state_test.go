@@ -531,3 +531,30 @@ func TestDesktopState_NegativeScenarios_Invariants(t *testing.T) {
 		t.Errorf("expected miss for fallback with zero resolution, got %q", text)
 	}
 }
+
+func TestDesktopState_FacetsDirectAccess(t *testing.T) {
+	// Test WindowFacet
+	var winFacet desktop.WindowFacet
+	winFacet.Apply(events.WindowEvent{ProcessName: "test.exe", WindowTitle: "Test Title"})
+	if winFacet.ProcessName() != "test.exe" || winFacet.WindowTitle() != "Test Title" {
+		t.Errorf("window facet getter failed")
+	}
+
+	// Test ClipboardFacet
+	var clipFacet desktop.ClipboardFacet
+	clipFacet.Apply(events.ClipboardEvent{Text: "Sample Clip", Length: 11})
+	if clipFacet.Text() != "Sample Clip" || clipFacet.ActiveClipboard().Length != 11 {
+		t.Errorf("clipboard facet getter failed")
+	}
+
+	// Test SpatialFacet custom layer registration
+	spatialFacet := desktop.NewSpatialFacet()
+	frame := display.OCRFrame{
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks:     []display.OCRTextBlock{{Text: "Custom Layer Text", Box: geometry.Rectangle{X: 0, Y: 0, Width: 100, Height: 100}}},
+	}
+	spatialFacet.SetLayer(0, frame)
+	if text, hit := spatialFacet.FindTextAt(geometry.Point{X: 50, Y: 50}); !hit || text != "Custom Layer Text" {
+		t.Errorf("custom layer hit-test failed: %q, %v", text, hit)
+	}
+}

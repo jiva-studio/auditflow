@@ -9,31 +9,26 @@ import (
 // ErrEmptyRuleID is returned when creating a rule with an empty identifier.
 var ErrEmptyRuleID = errors.New("rule id cannot be empty")
 
-// WhenConditions holds optional pattern conditions.
-// A rule fires when ALL defined (non-nil) conditions are satisfied.
-type WhenConditions struct {
-	Click       *PatternList
-	Process     *PatternList
-	WindowTitle *PatternList
-	Clipboard   *PatternList
-	OCR         *PatternList
-}
-
-// Rule represents a business rule that triggers a popup when conditions match.
+// Rule represents a business rule composed of specifications and a popup template.
 type Rule struct {
 	ID    string
-	When  WhenConditions
+	Specs []Specification
 	Popup PopupTemplate
 }
 
-// NewRule creates and validates a Rule entity.
+// NewRule creates and validates a Rule entity with standard WhenConditions.
 func NewRule(id string, when WhenConditions, popup PopupTemplate) (Rule, error) {
+	return NewRuleWithSpecs(id, when.ToSpecifications(), popup)
+}
+
+// NewRuleWithSpecs creates and validates a Rule entity with a custom list of specifications.
+func NewRuleWithSpecs(id string, specs []Specification, popup PopupTemplate) (Rule, error) {
 	if strings.TrimSpace(id) == "" {
 		return Rule{}, ErrEmptyRuleID
 	}
 	return Rule{
 		ID:    id,
-		When:  when,
+		Specs: specs,
 		Popup: popup,
 	}, nil
 }
@@ -47,86 +42,23 @@ type RuleEvaluationContext struct {
 	OCRScreenTexts []string
 }
 
-// Evaluate checks if the rule matches the context. If matched, returns rendered title, body, and true.
+// Evaluate checks if all rule specifications match the context.
 func (r Rule) Evaluate(ctx RuleEvaluationContext) (string, string, bool) {
-	vars := make(map[string]string)
+	vars := make(map[string]string, len(r.Specs))
 
-	if !r.matchClick(ctx.ClickText, vars) {
-		return "", "", false
-	}
-	if !r.matchProcess(ctx.Process, vars) {
-		return "", "", false
-	}
-	if !r.matchWindowTitle(ctx.WindowTitle, vars) {
-		return "", "", false
-	}
-	if !r.matchClipboard(ctx.ClipboardText, vars) {
-		return "", "", false
-	}
-	if !r.matchOCR(ctx.OCRScreenTexts, vars) {
-		return "", "", false
+	for _, spec := range r.Specs {
+		val, ok := spec.IsSatisfiedBy(ctx)
+		if !ok {
+			return "", "", false
+		}
+		if key := spec.VariableKey(); key != "" && val != "" {
+			vars[key] = val
+		}
 	}
 
 	r.populateDefaults(ctx, vars)
 	title, body := r.Popup.Render(vars)
 	return title, body, true
-}
-
-func (r Rule) matchClick(clickText string, vars map[string]string) bool {
-	if r.When.Click == nil || r.When.Click.IsEmpty() {
-		return true
-	}
-	if clickText == "" || !r.When.Click.Matches(clickText) {
-		return false
-	}
-	vars["click"] = clickText
-	return true
-}
-
-func (r Rule) matchProcess(process string, vars map[string]string) bool {
-	if r.When.Process == nil || r.When.Process.IsEmpty() {
-		return true
-	}
-	if process == "" || !r.When.Process.Matches(process) {
-		return false
-	}
-	vars["process"] = process
-	return true
-}
-
-func (r Rule) matchWindowTitle(title string, vars map[string]string) bool {
-	if r.When.WindowTitle == nil || r.When.WindowTitle.IsEmpty() {
-		return true
-	}
-	if title == "" || !r.When.WindowTitle.Matches(title) {
-		return false
-	}
-	vars["window_title"] = title
-	return true
-}
-
-func (r Rule) matchClipboard(clipboard string, vars map[string]string) bool {
-	if r.When.Clipboard == nil || r.When.Clipboard.IsEmpty() {
-		return true
-	}
-	if clipboard == "" || !r.When.Clipboard.Matches(clipboard) {
-		return false
-	}
-	vars["clipboard"] = clipboard
-	return true
-}
-
-func (r Rule) matchOCR(screenTexts []string, vars map[string]string) bool {
-	if r.When.OCR == nil || r.When.OCR.IsEmpty() {
-		return true
-	}
-	for _, text := range screenTexts {
-		if r.When.OCR.Matches(text) {
-			vars["ocr"] = text
-			return true
-		}
-	}
-	return false
 }
 
 func (r Rule) populateDefaults(ctx RuleEvaluationContext, vars map[string]string) {

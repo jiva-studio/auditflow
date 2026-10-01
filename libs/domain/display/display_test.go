@@ -99,10 +99,9 @@ func TestDisplayHitTest(t *testing.T) {
 	}
 }
 
-func TestOCRTextBlock_And_FrameValidation(t *testing.T) {
+func TestOCRTextBlock_Contains(t *testing.T) {
 	d, _ := NewDisplay(1, geometry.Rectangle{X: 0, Y: 0, Width: 1920, Height: 1080}, 1.0, true)
 
-	// OCRTextBlock Contains
 	tb := OCRTextBlock{
 		Text: "test",
 		Box:  geometry.Rectangle{X: 10, Y: 10, Width: 50, Height: 20},
@@ -114,12 +113,40 @@ func TestOCRTextBlock_And_FrameValidation(t *testing.T) {
 		t.Fatal("expected text block not to contain point")
 	}
 
-	// Invalid frame resolution
 	invalidFrame := OCRFrame{
 		Resolution: geometry.Size{Width: 0, Height: 0},
 	}
 	_, ok := invalidFrame.FindBlockAt(geometry.Point{X: 10, Y: 10}, d.Bounds)
 	if ok {
 		t.Fatal("expected FindBlockAt to fail with zero resolution")
+	}
+}
+
+func TestOCRFrame_SpatialLayer(t *testing.T) {
+	d, _ := NewDisplay(1, geometry.Rectangle{X: 0, Y: 0, Width: 1920, Height: 1080}, 1.0, true)
+
+	validFrame := OCRFrame{
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks: []OCRTextBlock{
+			{Text: "Layer Text 1", Box: geometry.Rectangle{X: 10, Y: 10, Width: 100, Height: 50}, Confidence: 0.98},
+			{Text: "", Box: geometry.Rectangle{X: 0, Y: 0, Width: 5, Height: 5}},
+			{Text: "Layer Text 2", Box: geometry.Rectangle{X: 200, Y: 200, Width: 100, Height: 50}, Confidence: 0.95},
+		},
+	}
+
+	var layer SpatialLayer = validFrame
+	hit, found := layer.HitTest(geometry.Point{X: 20, Y: 20}, d.Bounds)
+	if !found || hit.Text != "Layer Text 1" || hit.Source != "ocr" || hit.Confidence != 0.98 {
+		t.Fatalf("unexpected hit: %+v, %v", hit, found)
+	}
+
+	_, found = layer.HitTest(geometry.Point{X: 500, Y: 500}, d.Bounds)
+	if found {
+		t.Fatal("expected hit test to miss")
+	}
+
+	texts := layer.AllTexts()
+	if len(texts) != 2 || texts[0] != "Layer Text 1" || texts[1] != "Layer Text 2" {
+		t.Fatalf("unexpected all texts: %v", texts)
 	}
 }

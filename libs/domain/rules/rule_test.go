@@ -176,3 +176,47 @@ func TestRule_DefaultsAndMismatch(t *testing.T) {
 		t.Fatal("expected no match for empty window title")
 	}
 }
+
+// CustomSpecification demonstrates compile-time extensibility for future condition types.
+type CustomSpecification struct {
+	HeaderKey string
+	Expected  string
+}
+
+func (s CustomSpecification) VariableKey() string { return "custom" }
+func (s CustomSpecification) IsSatisfiedBy(ctx RuleEvaluationContext) (string, bool) {
+	if ctx.Process == s.Expected {
+		return s.Expected, true
+	}
+	return "", false
+}
+
+func TestRuleWithCustomSpecifications(t *testing.T) {
+	popupTmpl, _ := NewPopupTemplate("Alert", "Custom matched: {custom}")
+	customSpec := CustomSpecification{HeaderKey: "X-App", Expected: "secure_app.exe"}
+
+	rule, err := NewRuleWithSpecs("custom-rule", []Specification{customSpec}, popupTmpl)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Match
+	ctxMatch := RuleEvaluationContext{Process: "secure_app.exe"}
+	title, body, matched := rule.Evaluate(ctxMatch)
+	if !matched || title != "Alert" || body != "Custom matched: secure_app.exe" {
+		t.Fatalf("custom specification match failed: %s / %s", title, body)
+	}
+
+	// Mismatch
+	ctxMismatch := RuleEvaluationContext{Process: "other.exe"}
+	_, _, matched = rule.Evaluate(ctxMismatch)
+	if matched {
+		t.Fatal("expected custom spec to fail for other.exe")
+	}
+
+	// Empty ID error
+	_, err = NewRuleWithSpecs("", []Specification{customSpec}, popupTmpl)
+	if err != ErrEmptyRuleID {
+		t.Fatalf("expected ErrEmptyRuleID, got %v", err)
+	}
+}

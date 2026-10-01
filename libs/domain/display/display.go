@@ -36,6 +36,19 @@ type OCRFrame struct {
 	Filename    string
 }
 
+// SpatialHit represents the result of a spatial query against a visual layer.
+type SpatialHit struct {
+	Text       string
+	Confidence float64
+	Source     string
+}
+
+// SpatialLayer represents a queryable layer on a display (e.g. OCR, Accessibility tree, DOM).
+type SpatialLayer interface {
+	HitTest(localPoint geometry.Point, displayBounds geometry.Rectangle) (SpatialHit, bool)
+	AllTexts() []string
+}
+
 // FindBlockAt finds the first text block containing the given local display point.
 func (f OCRFrame) FindBlockAt(localPoint geometry.Point, displayBounds geometry.Rectangle) (OCRTextBlock, bool) {
 	if f.Resolution.Width <= 0 || f.Resolution.Height <= 0 {
@@ -57,6 +70,30 @@ func (f OCRFrame) FindBlockAt(localPoint geometry.Point, displayBounds geometry.
 		}
 	}
 	return OCRTextBlock{}, false
+}
+
+// HitTest implements SpatialLayer for OCRFrame.
+func (f OCRFrame) HitTest(localPoint geometry.Point, displayBounds geometry.Rectangle) (SpatialHit, bool) {
+	block, hit := f.FindBlockAt(localPoint, displayBounds)
+	if !hit {
+		return SpatialHit{}, false
+	}
+	return SpatialHit{
+		Text:       block.Text,
+		Confidence: block.Confidence,
+		Source:     "ocr",
+	}, true
+}
+
+// AllTexts returns all non-empty recognized text strings from this OCR frame.
+func (f OCRFrame) AllTexts() []string {
+	var texts []string
+	for _, block := range f.Blocks {
+		if block.Text != "" {
+			texts = append(texts, block.Text)
+		}
+	}
+	return texts
 }
 
 // Display represents a physical/virtual display with its bounding box and DPI scale.
