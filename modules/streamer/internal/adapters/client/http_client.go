@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -71,6 +72,7 @@ func (c *HTTPClient) SendTick(ctx context.Context, batch events.TickBatch) error
 		return fmt.Errorf("dispatch tick HTTP request: %w", err)
 	}
 	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 	}()
 
