@@ -21,7 +21,7 @@ run_in_env() {
 }
 
 # 2. Check formatting for staged Go files
-GO_FILES=$(echo "$STAGED_FILES" | grep '\.go$' || true)
+GO_FILES=$(echo "$STAGED_FILES" | grep '\.go$' | tr '\n' ' ' || true)
 if [ -n "$GO_FILES" ]; then
   UNFORMATTED=$(run_in_env "gofmt -l $GO_FILES" || true)
   if [ -n "$UNFORMATTED" ]; then
