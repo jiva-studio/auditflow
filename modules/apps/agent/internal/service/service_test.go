@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -281,4 +282,147 @@ func TestService_CheckReadiness(t *testing.T) {
 			t.Fatalf("expected ErrNoRulesLoaded, got: %v", err)
 		}
 	})
+}
+
+func runWindowStep(t *testing.T, svc *Service, client *mockAuditClient, idx int, ts time.Time, proc, title string, wantPopups int) {
+	t.Helper()
+	batch, _ := events.NewTickBatch(idx, ts, ts.Add(time.Second))
+	_ = batch.Add(events.WindowEvent{
+		Timestamp:   ts,
+		ProcessName: proc,
+		WindowTitle: title,
+	})
+	if err := svc.ProcessTick(context.Background(), batch); err != nil {
+		t.Fatalf("ProcessTick failed: %v", err)
+	}
+	if len(client.Popups()) != wantPopups {
+		t.Fatalf("expected %d popups, got %d", wantPopups, len(client.Popups()))
+	}
+}
+
+func runClipboardStep(t *testing.T, svc *Service, client *mockAuditClient, idx int, ts time.Time, text string, wantPopups int) {
+	t.Helper()
+	batch, _ := events.NewTickBatch(idx, ts, ts.Add(time.Second))
+	_ = batch.Add(events.ClipboardEvent{
+		Timestamp: ts,
+		Action:    "copy",
+		Text:      text,
+	})
+	if err := svc.ProcessTick(context.Background(), batch); err != nil {
+		t.Fatalf("ProcessTick failed: %v", err)
+	}
+	if len(client.Popups()) != wantPopups {
+		t.Fatalf("expected %d popups, got %d", wantPopups, len(client.Popups()))
+	}
+}
+
+func TestService_ContextCycling_Window(t *testing.T) {
+	client := &mockAuditClient{}
+	procPat, _ := rules.NewPatternList("OUTLOOK.EXE")
+	tpl, _ := rules.NewPopupTemplate("Outlook Focus", "Active: {process}")
+	r1, err := rules.NewRule("outlook-focus", rules.WhenConditions{
+		Process: &procPat,
+	}, tpl)
+	if err != nil {
+		t.Fatalf("failed to create rule: %v", err)
+	}
+
+	svc, err := NewService("emp-1", desktop.NewState(), []rules.Rule{r1}, client)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+
+	// 1. Initial focus triggers rule
+	runWindowStep(t, svc, client, 0, now, "OUTLOOK.EXE", "Inbox - Outlook", 1)
+	// 2. Same window focus is deduplicated
+	runWindowStep(t, svc, client, 1, now.Add(time.Second), "OUTLOOK.EXE", "Inbox - Outlook", 1)
+	// 3. Switching to unmonitored window emits no popup
+	runWindowStep(t, svc, client, 2, now.Add(2*time.Second), "notepad.exe", "Untitled - Notepad", 1)
+	// 4. Returning to monitored window re-triggers rule
+	runWindowStep(t, svc, client, 3, now.Add(3*time.Second), "OUTLOOK.EXE", "Inbox - Outlook", 2)
+}
+
+func TestService_ContextCycling_Clipboard(t *testing.T) {
+	client := &mockAuditClient{}
+	rls := sampleTestRules(t)
+	svc, err := NewService("emp-1", desktop.NewState(), rls, client)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	runWindowStep(t, svc, client, 0, now, "OUTLOOK.EXE", "Inbox - Outlook", 0)
+
+	// 1. Initial invoice copy triggers rule
+	runClipboardStep(t, svc, client, 1, now.Add(time.Second), "INV-100", 1)
+	// 2. Duplicate copy is deduplicated
+	runClipboardStep(t, svc, client, 2, now.Add(2*time.Second), "INV-100", 1)
+	// 3. Copying regular text resets clipboard state without popup
+	runClipboardStep(t, svc, client, 3, now.Add(3*time.Second), "Hello World", 1)
+	// 4. Copying invoice again re-triggers rule
+	runClipboardStep(t, svc, client, 4, now.Add(4*time.Second), "INV-100", 2)
+}
+
+func TestService_ContextFlappingTorture(t *testing.T) {
+	client := &mockAuditClient{}
+	rls := sampleTestRules(t)
+	svc, err := NewService("emp-torture", desktop.NewState(), rls, client)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	apps := []struct {
+		proc  string
+		title string
+	}{
+		{"OUTLOOK.EXE", "Inbox - Outlook"},
+		{"chrome.exe", "Google - Chrome"},
+		{"EXCEL.EXE", "Book1 - Excel"},
+		{"notepad.exe", "Untitled - Notepad"},
+		{"", ""},
+		{"unknown.exe", strings.Repeat("Huge Title ", 100)},
+	}
+
+	batch, _ := events.NewTickBatch(0, now, now.Add(10*time.Second))
+
+	for i := 0; i < 100; i++ {
+		app := apps[i%len(apps)]
+		ts := now.Add(time.Duration(i*10) * time.Millisecond)
+
+		_ = batch.Add(events.WindowEvent{
+			Timestamp:   ts,
+			ProcessName: app.proc,
+			WindowTitle: app.title,
+		})
+
+		switch i {
+		case 10:
+			_ = batch.Add(events.ClipboardEvent{
+				Timestamp: ts.Add(time.Millisecond),
+				Text:      "INV-999",
+			})
+		case 30:
+			_ = batch.Add(events.ClipboardEvent{
+				Timestamp: ts.Add(time.Millisecond),
+				Text:      strings.Repeat("X", 50000),
+			})
+		case 50:
+			_ = batch.Add(events.ClipboardEvent{
+				Timestamp: ts.Add(time.Millisecond),
+				Text:      "",
+			})
+		case 70:
+			_ = batch.Add(events.ClipboardEvent{
+				Timestamp: ts.Add(time.Millisecond),
+				Text:      "INV-999",
+			})
+		}
+	}
+
+	if err := svc.ProcessTick(context.Background(), batch); err != nil {
+		t.Fatalf("ProcessTick failed during flapping torture: %v", err)
+	}
 }

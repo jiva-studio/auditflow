@@ -1,0 +1,27 @@
+{
+  "employee_id": "emp-contextreset",
+  "total_popups": 3,
+  "popups": [
+    {
+      "employee": "emp-contextreset",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T22:00:01Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-100. Attach the invoice to this email?"
+    },
+    {
+      "employee": "emp-contextreset",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T22:00:03Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-100. Attach the invoice to this email?"
+    },
+    {
+      "employee": "emp-contextreset",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T22:00:05Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-100. Attach the invoice to this email?"
+    }
+  ]
+}

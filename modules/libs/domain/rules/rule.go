@@ -85,3 +85,23 @@ func (r Rule) RequiresClick() bool {
 	}
 	return false
 }
+
+// DependsOnWindow returns true if any specification in the rule depends on window or process context.
+func (r Rule) DependsOnWindow() bool {
+	for _, spec := range r.Specs {
+		if spec.VariableKey() == "window_title" || spec.VariableKey() == "process" {
+			return true
+		}
+	}
+	return false
+}
+
+// DependsOnClipboard returns true if any specification in the rule depends on clipboard context.
+func (r Rule) DependsOnClipboard() bool {
+	for _, spec := range r.Specs {
+		if spec.VariableKey() == "clipboard" {
+			return true
+		}
+	}
+	return false
+}

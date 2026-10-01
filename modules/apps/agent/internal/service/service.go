@@ -78,12 +78,42 @@ func (s *Service) ProcessTick(ctx context.Context, batch events.TickBatch) error
 	defer s.mu.Unlock()
 
 	for _, ev := range batch.Events() {
+		s.handleContextTransition(ev)
 		s.state.Apply(ev)
 		if err := s.processEvent(ctx, ev); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (s *Service) handleContextTransition(ev events.Event) {
+	switch e := ev.(type) {
+	case events.WindowEvent:
+		if e.ProcessName != s.state.ActiveProcess() || e.WindowTitle != s.state.ActiveWindowTitle() {
+			s.invalidateWindowRules()
+		}
+	case events.ClipboardEvent:
+		if e.Text != s.state.ActiveClipboardText() {
+			s.invalidateClipboardRules()
+		}
+	}
+}
+
+func (s *Service) invalidateWindowRules() {
+	for _, r := range s.rules {
+		if r.DependsOnWindow() && !r.DependsOnClipboard() {
+			delete(s.lastEmittedStates, r.ID)
+		}
+	}
+}
+
+func (s *Service) invalidateClipboardRules() {
+	for _, r := range s.rules {
+		if r.DependsOnClipboard() {
+			delete(s.lastEmittedStates, r.ID)
+		}
+	}
 }
 
 func (s *Service) processEvent(ctx context.Context, ev events.Event) error {

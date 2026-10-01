@@ -236,3 +236,39 @@ func TestRule_RequiresClick(t *testing.T) {
 		t.Error("expected rClip.RequiresClick() to be false")
 	}
 }
+
+func TestRule_DependsOnWindowAndClipboard(t *testing.T) {
+	procPat, _ := NewPatternList("OUTLOOK.EXE")
+	winPat, _ := NewPatternList("* - Jira")
+	clipPat, _ := NewPatternList("INV-*")
+	tpl, _ := NewPopupTemplate("T", "B")
+
+	tests := []struct {
+		name       string
+		conditions WhenConditions
+		wantWindow bool
+		wantClip   bool
+	}{
+		{"proc_only", WhenConditions{Process: &procPat}, true, false},
+		{"win_only", WhenConditions{WindowTitle: &winPat}, true, false},
+		{"clip_only", WhenConditions{Clipboard: &clipPat}, false, true},
+		{"both", WhenConditions{Process: &procPat, Clipboard: &clipPat}, true, true},
+		{"none", WhenConditions{}, false, false},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := NewRule("r-"+tc.name, tc.conditions, tpl)
+			if err != nil {
+				t.Fatalf("failed to create rule: %v", err)
+			}
+			if got := r.DependsOnWindow(); got != tc.wantWindow {
+				t.Errorf("DependsOnWindow() = %v, want %v", got, tc.wantWindow)
+			}
+			if got := r.DependsOnClipboard(); got != tc.wantClip {
+				t.Errorf("DependsOnClipboard() = %v, want %v", got, tc.wantClip)
+			}
+		})
+	}
+}
