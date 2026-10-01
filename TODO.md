@@ -8,18 +8,9 @@ This document outlines the engineering roadmap to scale **AuditFlow** from the c
 
 ```mermaid
 flowchart TD
-    IdP["🏢 Corporate IdP (Okta / Entra ID / SCIM)"] -->|"Sync Users & Groups"| API["📡 Central API Server"]
-    Admin["👤 Security Admin"] -->|"Invite & Manage Roles"| Dashboard["🖥️ Web Dashboard"]
-    Dashboard -->|"OIDC / SSO Auth"| API
-    
-    subgraph Workstation["🖥️ Employee Workstation"]
-        Activity["Workstation Activity"] --> Agent["⚙️ AuditFlow Agent"]
-        Agent <--> SQLite[("🗄️ SQLite Buffer")]
-        Agent --> Sanitizer["🛡️ PII Masking"]
-    end
-    
-    MDM["📦 Corporate MDM (Intune / Jamf)"] -.->|"Enrollment"| Agent
-    Employee["👤 Employee"] -.->|"SSO Login"| Agent
+    Activity["🖥️ Workstation Activity"] --> Agent["⚙️ AuditFlow Agent"]
+    Agent <--> SQLite[("🗄️ SQLite Buffer")]
+    Agent --> Sanitizer["🛡️ PII Masking"]
     
     Sanitizer -->|"Protobuf"| LB["🌐 Load Balancer"]
     LB --> Ingest["🚀 Ingestion Gateways"]
@@ -28,6 +19,7 @@ flowchart TD
     Broker --> Consumer["⚙️ Consumer Workers"]
     Consumer -->|"Batch Write"| AuditDB[("📊 Audit Database")]
     
+    Dashboard["🖥️ Web Dashboard"] --> API["📡 Central API Server"]
     API -->|"Query Audit Logs"| AuditDB
     API <-->|"Tenant & User Config"| ConfigDB[("🗄️ Config Database")]
     API -.->|"Push Rule Updates"| Agent
@@ -41,7 +33,7 @@ flowchart TD
 ## 2. Component Justifications
 
 * **Go Agent & SQLite Buffer**: Go provides a single native static binary with zero runtime dependencies and minimal footprint (<30 MB RAM, <2% CPU). Embedded SQLite (WAL mode) safely queues audit popups locally during VPN/network drops and drains with jitter upon reconnection.
-* **Identity, Auth & Device Enrollment**: Hybrid authentication model supporting zero-touch silent MDM enrollment (machine tokens) for managed corporate fleets, and interactive corporate SSO (OIDC/SAML) with hardware-bound, rotatable device tokens for self-serve onboarding.
+* **Employee & Device Identification**: Workstations and dashboard users need authentication to map telemetry to employees and restrict management access.
 * **Client-Side PII Masking**: Privacy by design. Sensitive data (passwords, tokens, credit cards with Luhn verification) is redacted on the endpoint before network egress to comply with security standards.
 * **Message Broker**: Buffers high-throughput bursts (e.g., morning login spikes) and partitions events by `employee_id` to guarantee in-order event processing without database overload.
 * **Dual Database Layer**:
@@ -61,7 +53,7 @@ flowchart TD
 
 ### 2. High-Throughput Ingestion & Event Broker
 * [ ] **Protobuf Contract Versioning & Schema Registry**: Version Protobuf contracts (`v1`, `v2`) with backward/forward compatibility rules so that older and newer agent versions can run simultaneously without breaking the central server.
-* [ ] **Stateless Ingestion Gateways**: Deploy Go ingestion gateways behind a load balancer to handle TLS encryption, validate agent device tokens, and stream Protobuf payloads directly into the message broker.
+* [ ] **Stateless Ingestion Gateways**: Deploy Go ingestion gateways behind a load balancer to handle TLS encryption, validate agent tokens, and stream Protobuf payloads directly into the message broker.
 * [ ] **Message Broker**: Configure topics with fixed partition counts, routing events by key `employee_id` to guarantee strict sequential processing per employee session while absorbing traffic spikes.
 
 ### 3. Scalable Storage & Database Layer
@@ -73,12 +65,9 @@ flowchart TD
 * [ ] **Zero-Downtime Rule Hot-Reloading**: Push updated rules to running agents via gRPC/WebSocket, swapping rule trees atomically in memory (`atomic.Pointer`) without process restart or dropped ticks.
 * [ ] **Web Dashboard**: Provide a web interface to inspect audit popups, filter by employee or rule, view statistics, and edit active rules.
 
-### 5. Identity, Authentication & Device Onboarding
-* [ ] **Corporate SSO & OIDC / SAML 2.0**: Integrate corporate identity providers (Okta, Microsoft Entra ID, Google Workspace) for dashboard access and interactive agent sign-in.
-* [ ] **Automated SCIM Directory Sync & Bulk Invitations**: Implement SCIM 2.0 user provisioning and CSV import to automatically create, update, and deprovision employee accounts and department groups.
-* [ ] **Zero-Touch Enterprise MDM Enrollment**: Enable silent agent registration during MSI/PKG installation via corporate enrollment tokens and machine certificates pushed by Microsoft Intune or Jamf Pro.
-* [ ] **Device Fingerprinting & Rotatable Device Keys**: Generate cryptographically signed, short-lived device tokens bound to workstation hardware UUID and OS user account with automatic background rotation.
-* [ ] **Granular RBAC & Instant Token Revocation**: Enforce role-based access control (Admin, Compliance Officer, Auditor, Manager) and implement immediate device token revocation upon employee offboarding or device loss.
+### 5. Identity & Employee Management
+* [ ] **Employee & Device Authentication**: Authenticate employee agents and web dashboard users to reliably associate telemetry with specific employees.
+* [ ] **Employee Directory & Invitations**: Provide dashboard interface to invite employees, manage employee profiles, and configure access permissions.
 
 ### 6. Staged Agent Rollout Strategy (Canary Deployment)
 
@@ -108,7 +97,7 @@ flowchart TD
 | :--- | :--- | :--- |
 | **Agent & OS Core** | Endpoint Systems Engineering | Native OS service hooks, SQLite offline queue, PII sanitizer, A/B updater |
 | **Platform & Ingestion** | Cloud Infrastructure & Data | Ingestion gateways, Message broker, Audit database, consumer groups |
-| **Identity & Security** | Security & Auth Engineering | SSO/OIDC integrations, SCIM directory sync, device token rotation, RBAC |
+| **Identity & Security** | Security & Auth Engineering | Employee authentication, invitations, directory sync, access control |
 | **Rules & Detection** | Security & Rule Engine | Rule compiler, hot-reload sync, ReDoS validation, Protobuf contract versions |
 | **Product & UI** | Full-Stack Product Team | Web dashboard, rule editor, audit popup feeds, MDM packaging |
 
