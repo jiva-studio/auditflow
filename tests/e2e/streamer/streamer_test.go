@@ -1,14 +1,19 @@
 package streamer_test
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
+	"time"
 
 	"assessment/tests/e2e/testutil"
 )
@@ -92,5 +97,57 @@ func TestStreamer_E2E(t *testing.T) {
 				t.Errorf("last tick sha256 mismatch:\ngot  %s\nwant %s", actualLastHash, fixture.LastTickSHA256)
 			}
 		})
+	}
+}
+
+func TestStreamer_E2E_GracefulShutdown(t *testing.T) {
+	binPath := testutil.GetStreamerBin(t)
+	dataDir := testutil.GetDataDir(t)
+	archivePath := filepath.Join(dataDir, "emp-1.tar.gz")
+
+	var totalTicks atomic.Int32
+	server := testutil.NewMockAgentServer(t, func(body []byte) {
+		totalTicks.Add(1)
+	})
+	defer server.Close()
+
+	// Slow down ticks (100ms each) so we can cleanly interrupt in-flight
+	cmd := exec.Command(binPath)
+	cmd.Env = append(os.Environ(),
+		"RECORDING_PATH="+archivePath,
+		"AGENT_URL="+server.URL,
+		"TICK_MS=100",
+	)
+	var outBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &outBuf
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start streamer process: %v", err)
+	}
+
+	// Wait until at least 3 ticks are received
+	deadline := time.Now().Add(5 * time.Second)
+	for totalTicks.Load() < 3 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if totalTicks.Load() < 3 {
+		t.Fatalf("streamer did not produce ticks in time, got %d", totalTicks.Load())
+	}
+
+	// Send SIGTERM to test graceful cancellation
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatalf("failed to send SIGTERM: %v", err)
+	}
+
+	err := cmd.Wait()
+	if err != nil {
+		t.Fatalf("streamer process failed to exit cleanly on SIGTERM: %v\noutput: %s", err, outBuf.String())
+	}
+
+	outStr := outBuf.String()
+	if !strings.Contains(outStr, "replay cancelled after") {
+		t.Errorf("expected graceful cancellation message in logs, got: %s", outStr)
 	}
 }
