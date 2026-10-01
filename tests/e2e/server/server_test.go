@@ -57,8 +57,9 @@ func getFreePort(t *testing.T) int {
 func waitForHealth(t *testing.T, url string, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
+	client := &http.Client{Timeout: 200 * time.Millisecond}
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(url + "/health")
+		resp, err := client.Get(url + "/health")
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -103,7 +104,8 @@ func stopProcess(t *testing.T, cmd *exec.Cmd) {
 
 func queryServer(t *testing.T, serverURL, queryPath string) []expectedPopup {
 	t.Helper()
-	resp, err := http.Get(serverURL + queryPath)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(serverURL + queryPath)
 	if err != nil {
 		t.Fatalf("failed to query server: %v", err)
 	}
