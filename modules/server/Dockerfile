@@ -10,13 +10,13 @@ WORKDIR /workspace
 
 COPY libs/domain/ libs/domain/
 COPY libs/protocol/ libs/protocol/
-COPY modules/streamer/ modules/streamer/
+COPY modules/server/ modules/server/
 
-WORKDIR /workspace/modules/streamer
+WORKDIR /workspace/modules/server
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
     -ldflags="-s -w -extldflags '-static'" \
-    -o /bin/streamer ./cmd/main.go
+    -o /bin/server ./cmd/main.go
 
 # ==============================================================================
 # STAGE 2: MINIMAL HARDENED RUNTIME
@@ -29,6 +29,7 @@ RUN apk --no-cache add ca-certificates tzdata wget && \
 
 USER 10001:10001
 
-COPY --from=builder --chown=10001:10001 /bin/streamer /bin/streamer
+COPY --from=builder --chown=10001:10001 /bin/server /bin/server
 
-ENTRYPOINT ["/bin/streamer"]
+EXPOSE 8080
+ENTRYPOINT ["/bin/server"]
