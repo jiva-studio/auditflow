@@ -1,0 +1,116 @@
+# ==============================================================================
+# REUSABLE BASE TEMPLATES (YAML Anchors & Extensions)
+# ==============================================================================
+
+x-agent-base: &agent-base
+  build:
+    context: .
+    dockerfile: modules/agent/Dockerfile
+  environment:
+    PORT: "8081"
+    RULES_PATH: "/data/rules.json"
+    SERVER_URL: "http://server:8080"
+  volumes:
+    - ./data/rules.json:/data/rules.json:ro
+  depends_on:
+    server:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/health/ready || exit 1"]
+    interval: 1s
+    timeout: 2s
+    retries: 15
+    start_period: 1s
+
+x-streamer-base: &streamer-base
+  build:
+    context: .
+    dockerfile: modules/streamer/Dockerfile
+  environment:
+    TICK_MS: "${TICK_MS:-10}"
+  volumes:
+    - ./data:/data:ro
+
+# ==============================================================================
+# SERVICES DEFINITION
+# ==============================================================================
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: modules/server/Dockerfile
+    container_name: server
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health/ready || exit 1"]
+      interval: 1s
+      timeout: 2s
+      retries: 15
+      start_period: 1s
+
+  # --- Employee 1 ---
+  agent-emp-1:
+    <<: *agent-base
+    container_name: agent-emp-1
+    environment:
+      PORT: "8081"
+      RULES_PATH: "/data/rules.json"
+      SERVER_URL: "http://server:8080"
+      EMPLOYEE_ID: "emp-1"
+
+  streamer-emp-1:
+    <<: *streamer-base
+    container_name: streamer-emp-1
+    environment:
+      RECORDING_PATH: "/data/emp-1.tar.gz"
+      AGENT_URL: "http://agent-emp-1:8081"
+      TICK_MS: "${TICK_MS:-10}"
+    depends_on:
+      agent-emp-1:
+        condition: service_healthy
+
+  # --- Employee 2 ---
+  agent-emp-2:
+    <<: *agent-base
+    container_name: agent-emp-2
+    environment:
+      PORT: "8081"
+      RULES_PATH: "/data/rules.json"
+      SERVER_URL: "http://server:8080"
+      EMPLOYEE_ID: "emp-2"
+
+  streamer-emp-2:
+    <<: *streamer-base
+    container_name: streamer-emp-2
+    environment:
+      RECORDING_PATH: "/data/emp-2.tar.gz"
+      AGENT_URL: "http://agent-emp-2:8081"
+      TICK_MS: "${TICK_MS:-10}"
+    depends_on:
+      agent-emp-2:
+        condition: service_healthy
+
+  # --- Employee 3 ---
+  agent-emp-3:
+    <<: *agent-base
+    container_name: agent-emp-3
+    environment:
+      PORT: "8081"
+      RULES_PATH: "/data/rules.json"
+      SERVER_URL: "http://server:8080"
+      EMPLOYEE_ID: "emp-3"
+
+  streamer-emp-3:
+    <<: *streamer-base
+    container_name: streamer-emp-3
+    environment:
+      RECORDING_PATH: "/data/emp-3.tar.gz"
+      AGENT_URL: "http://agent-emp-3:8081"
+      TICK_MS: "${TICK_MS:-10}"
+    depends_on:
+      agent-emp-3:
+        condition: service_healthy
