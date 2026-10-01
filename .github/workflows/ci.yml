@@ -228,6 +228,10 @@ jobs:
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=AuditFlow ${{ matrix.service }}
+            org.opencontainers.image.description=AuditFlow ${{ matrix.service }} service
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       - name: Build and Push Docker Image to GitHub Packages
         uses: docker/build-push-action@v5
