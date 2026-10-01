@@ -549,18 +549,8 @@ func (s *TarGzEventSource) streamKWayMerge(
 	tickIdx := 0
 
 	for currStart.Before(endedAt) {
-		currEnd := currStart.Add(time.Second)
-		if currEnd.After(endedAt) {
-			currEnd = endedAt
-		}
-
-		batch, err := events.NewTickBatch(tickIdx, currStart, currEnd)
+		batch, nextStart, err := s.buildTickBatch(ctx, h, meta, tickIdx, currStart, endedAt)
 		if err != nil {
-			errCh <- err
-			return
-		}
-
-		if err := collectBatchEvents(ctx, h, &batch, currStart, currEnd); err != nil {
 			errCh <- err
 			return
 		}
@@ -572,13 +562,44 @@ func (s *TarGzEventSource) streamKWayMerge(
 		case tickCh <- batch:
 		}
 
-		currStart = currEnd
+		currStart = nextStart
 		tickIdx++
 	}
 
 	if err := emitTrailingBatch(ctx, h, tickIdx, currStart, tickCh); err != nil {
 		errCh <- err
 	}
+}
+
+func (s *TarGzEventSource) buildTickBatch(
+	ctx context.Context,
+	h *streamHeap,
+	meta session.Metadata,
+	tickIdx int,
+	currStart, endedAt time.Time,
+) (events.TickBatch, time.Time, error) {
+	currEnd := currStart.Add(time.Second)
+	if currEnd.After(endedAt) {
+		currEnd = endedAt
+	}
+
+	batch, err := events.NewTickBatch(tickIdx, currStart, currEnd)
+	if err != nil {
+		return events.TickBatch{}, time.Time{}, err
+	}
+
+	if tickIdx == 0 && len(meta.Displays) > 0 {
+		_ = batch.Add(events.DisplayTopologyEvent{
+			Timestamp: time.Unix(0, 0).UTC(),
+			Displays:  meta.Displays,
+		})
+	}
+
+	if err := collectBatchEvents(ctx, h, &batch, currStart, currEnd); err != nil {
+		return events.TickBatch{}, time.Time{}, err
+	}
+
+	return batch, currEnd, nil
 }
 
 func parseEventLine(filename string, line []byte, rep ports.ErrorReporter) (events.Event, error) {

@@ -1,6 +1,6 @@
 {
   "employee_id": "emp-3",
-  "total_popups": 2,
+  "total_popups": 3,
   "popups": [
     {
       "employee": "emp-3",
@@ -8,6 +8,13 @@
       "ts": "2026-03-10T21:21:32Z",
       "title": "Invoice in clipboard",
       "body": "You copied INV-20417. Attach the invoice to this email?"
+    },
+    {
+      "employee": "emp-3",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T21:21:32Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Updated floor plan - booth 1813"
     },
     {
       "employee": "emp-3",

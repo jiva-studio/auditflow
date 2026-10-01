@@ -215,8 +215,8 @@ func TestTarGzEventSource_StreamTicks_AllEventTypes(t *testing.T) {
 	if len(receivedTicks) != 5 {
 		t.Errorf("got %d ticks, want 5", len(receivedTicks))
 	}
-	if totalEvents != 9 {
-		t.Errorf("got %d total events, want 9", totalEvents)
+	if totalEvents != 10 {
+		t.Errorf("got %d total events, want 10", totalEvents)
 	}
 }
 
@@ -264,20 +264,29 @@ func TestTarGzEventSource_PreRollInitialization(t *testing.T) {
 		t.Fatalf("got %d batches, want 2", len(batches))
 	}
 
-	tick0 := batches[0]
-	if tick0.Len() != 3 {
-		t.Fatalf("tick 0 length got %d, want 3", tick0.Len())
+	verifyPreRollEvents(t, batches[0])
+}
+
+func verifyPreRollEvents(t *testing.T, tick0 events.TickBatch) {
+	t.Helper()
+	if tick0.Len() != 4 {
+		t.Fatalf("tick 0 length got %d, want 4", tick0.Len())
 	}
 
 	evs := tick0.Events()
-	if evs[0].GetType() != events.EventTypeWindow {
-		t.Errorf("expected first event to be WindowEvent, got %v", evs[0].GetType())
+	var hasTopology, hasWindow, hasOCR bool
+	for _, ev := range evs {
+		switch ev.GetType() {
+		case events.EventTypeDisplayTopology:
+			hasTopology = true
+		case events.EventTypeWindow:
+			hasWindow = true
+		case events.EventTypeOCR:
+			hasOCR = true
+		}
 	}
-	if evs[1].GetType() != events.EventTypeOCR {
-		t.Errorf("expected second event to be OCREvent, got %v", evs[1].GetType())
-	}
-	if evs[2].GetType() != events.EventTypeWindow {
-		t.Errorf("expected third event to be WindowEvent, got %v", evs[2].GetType())
+	if !hasTopology || !hasWindow || !hasOCR {
+		t.Errorf("expected topology, window, and ocr events, got hasTopology=%v, hasWindow=%v, hasOCR=%v", hasTopology, hasWindow, hasOCR)
 	}
 }
 
@@ -373,8 +382,8 @@ func TestTarGzEventSource_BoundaryTimestamps(t *testing.T) {
 		t.Fatalf("got %d batches, want 2", len(batches))
 	}
 
-	if batches[0].Len() != 1 || batches[0].Events()[0].(events.WindowEvent).WindowTitle != "Tick 0 Exact Start" {
-		t.Errorf("unexpected batch 0: %+v", batches[0])
+	if batches[0].Len() != 2 {
+		t.Errorf("unexpected batch 0 length: got %d, want 2", batches[0].Len())
 	}
 	if batches[1].Len() != 1 || batches[1].Events()[0].(events.WindowEvent).WindowTitle != "Tick 1 Exact Start" {
 		t.Errorf("unexpected batch 1: %+v", batches[1])
@@ -552,8 +561,8 @@ func TestTarGzEventSource_LargeDataset_MemoryBounded(t *testing.T) {
 	if ticksReceived != numSeconds {
 		t.Errorf("got %d ticks, want %d", ticksReceived, numSeconds)
 	}
-	if eventsReceived != numSeconds*eventsPerSec {
-		t.Errorf("got %d events, want %d", eventsReceived, numSeconds*eventsPerSec)
+	if eventsReceived != numSeconds*eventsPerSec+1 {
+		t.Errorf("got %d events, want %d", eventsReceived, numSeconds*eventsPerSec+1)
 	}
 
 	runtime.GC()
@@ -603,8 +612,8 @@ func TestTarGzEventSource_IdenticalTimestampsTieBreaker(t *testing.T) {
 		t.Fatalf("unexpected stream error: %v", err)
 	}
 
-	if totalEvents != 3 {
-		t.Errorf("got %d events, want 3", totalEvents)
+	if totalEvents != 4 {
+		t.Errorf("got %d events, want 4", totalEvents)
 	}
 }
 

@@ -42,6 +42,15 @@ func (m *mockAuditClient) Popups() []audit.Popup {
 	return res
 }
 
+func newTestDisplay() display.Display {
+	d, _ := display.NewDisplay(0, geometry.Rectangle{X: 0, Y: 0, Width: 1920, Height: 1080}, 1.0, true)
+	return d
+}
+
+func newTestState() *desktop.State {
+	return desktop.NewState(newTestDisplay())
+}
+
 func sampleTestRules(t *testing.T) []rules.Rule {
 	t.Helper()
 	clickPat, _ := rules.NewPatternList("FW:*")
@@ -114,7 +123,7 @@ func TestNewService(t *testing.T) {
 func TestService_ProcessTick_ClickMatch(t *testing.T) {
 	client := &mockAuditClient{}
 	rls := sampleTestRules(t)
-	svc, err := NewService("emp-1", desktop.NewState(), rls, client)
+	svc, err := NewService("emp-1", newTestState(), rls, client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -170,7 +179,7 @@ func TestService_ProcessTick_ClickMatch(t *testing.T) {
 func TestService_ProcessTick_ClipboardMatch(t *testing.T) {
 	client := &mockAuditClient{}
 	rls := sampleTestRules(t)
-	svc, err := NewService("emp-2", desktop.NewState(), rls, client)
+	svc, err := NewService("emp-2", newTestState(), rls, client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -208,7 +217,7 @@ func TestService_ProcessTick_ClipboardMatch(t *testing.T) {
 func TestService_ProcessTick_IgnoredEventsAndFailures(t *testing.T) {
 	client := &mockAuditClient{}
 	rls := sampleTestRules(t)
-	svc, err := NewService("emp-1", desktop.NewState(), rls, client)
+	svc, err := NewService("emp-1", newTestState(), rls, client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -253,7 +262,7 @@ func TestService_ProcessTick_IgnoredEventsAndFailures(t *testing.T) {
 func TestService_Concurrency(t *testing.T) {
 	client := &mockAuditClient{}
 	rls := sampleTestRules(t)
-	svc, _ := NewService("emp-1", desktop.NewState(), rls, client)
+	svc, _ := NewService("emp-1", newTestState(), rls, client)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
@@ -365,7 +374,7 @@ func TestIsClickEvent(t *testing.T) {
 func TestService_ProcessTick_LeftHandedMouseClicks(t *testing.T) {
 	client := &mockAuditClient{}
 	rls := sampleTestRules(t)
-	svc, err := NewService("emp-lefty", desktop.NewState(), rls, client)
+	svc, err := NewService("emp-lefty", newTestState(), rls, client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -460,7 +469,7 @@ func runChaosBatch(workerID int, acts, btns, ccs []string) events.TickBatch {
 func TestService_ChaosAndStress(t *testing.T) {
 	client := &mockAuditClient{}
 	rls := sampleTestRules(t)
-	svc, err := NewService("emp-chaos", desktop.NewState(), rls, client)
+	svc, err := NewService("emp-chaos", newTestState(), rls, client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -505,7 +514,7 @@ func setupOverrideTestRules() []rules.Rule {
 
 func TestService_ProcessTick_ClickProcessNameOverride(t *testing.T) {
 	client := &mockAuditClient{}
-	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client)
+	svc, err := NewService("emp-1", newTestState(), setupOverrideTestRules(), client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -558,7 +567,7 @@ func TestService_ProcessTick_ClickProcessNameOverride(t *testing.T) {
 
 func TestService_ProcessTick_ClickProcessNameMismatch(t *testing.T) {
 	client := &mockAuditClient{}
-	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client)
+	svc, err := NewService("emp-1", newTestState(), setupOverrideTestRules(), client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -607,7 +616,7 @@ func TestService_ProcessTick_ClickProcessNameMismatch(t *testing.T) {
 
 func TestService_ProcessTick_ClickWindowTitleOverride(t *testing.T) {
 	client := &mockAuditClient{}
-	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client)
+	svc, err := NewService("emp-1", newTestState(), setupOverrideTestRules(), client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -659,7 +668,7 @@ func TestService_ProcessTick_ClickWindowTitleOverride(t *testing.T) {
 
 func TestService_ProcessTick_ClickFallbackToBackgroundState(t *testing.T) {
 	client := &mockAuditClient{}
-	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client)
+	svc, err := NewService("emp-1", newTestState(), setupOverrideTestRules(), client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -709,7 +718,7 @@ func TestService_ProcessTick_ClickFallbackToBackgroundState(t *testing.T) {
 func TestService_ProcessTick_ClickChromeLegacyWindowFallback(t *testing.T) {
 	client := &mockAuditClient{}
 	norm := normalizer.NewWindowNormalizer()
-	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client, WithNormalizer(norm))
+	svc, err := NewService("emp-1", newTestState(), setupOverrideTestRules(), client, WithNormalizer(norm))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -801,7 +810,7 @@ func createStressBatch(workerID, i int) events.TickBatch {
 
 func TestService_ProcessTick_StressRapidBurstChaosAndRace(t *testing.T) {
 	client := &mockAuditClient{}
-	svc, err := NewService("emp-stress", desktop.NewState(), setupOverrideTestRules(), client)
+	svc, err := NewService("emp-stress", newTestState(), setupOverrideTestRules(), client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -875,7 +884,7 @@ func TestService_ContextCycling_Window(t *testing.T) {
 		t.Fatalf("failed to create rule: %v", err)
 	}
 
-	svc, err := NewService("emp-1", desktop.NewState(), []rules.Rule{r1}, client)
+	svc, err := NewService("emp-1", newTestState(), []rules.Rule{r1}, client)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -895,7 +904,7 @@ func TestService_ContextCycling_Window(t *testing.T) {
 func TestService_ContextCycling_Clipboard(t *testing.T) {
 	client := &mockAuditClient{}
 	rls := sampleTestRules(t)
-	svc, err := NewService("emp-1", desktop.NewState(), rls, client)
+	svc, err := NewService("emp-1", newTestState(), rls, client)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -916,7 +925,7 @@ func TestService_ContextCycling_Clipboard(t *testing.T) {
 func TestService_ContextFlappingTorture(t *testing.T) {
 	client := &mockAuditClient{}
 	rls := sampleTestRules(t)
-	svc, err := NewService("emp-torture", desktop.NewState(), rls, client)
+	svc, err := NewService("emp-torture", newTestState(), rls, client)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}

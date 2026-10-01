@@ -698,6 +698,126 @@ func (x *GenericActivityEvent) GetType() string {
 	return ""
 }
 
+type Display struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int32                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Bounds        *Rectangle             `protobuf:"bytes,2,opt,name=bounds,proto3" json:"bounds,omitempty"`
+	Scale         float64                `protobuf:"fixed64,3,opt,name=scale,proto3" json:"scale,omitempty"`
+	Primary       bool                   `protobuf:"varint,4,opt,name=primary,proto3" json:"primary,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Display) Reset() {
+	*x = Display{}
+	mi := &file_events_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Display) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Display) ProtoMessage() {}
+
+func (x *Display) ProtoReflect() protoreflect.Message {
+	mi := &file_events_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Display.ProtoReflect.Descriptor instead.
+func (*Display) Descriptor() ([]byte, []int) {
+	return file_events_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *Display) GetId() int32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *Display) GetBounds() *Rectangle {
+	if x != nil {
+		return x.Bounds
+	}
+	return nil
+}
+
+func (x *Display) GetScale() float64 {
+	if x != nil {
+		return x.Scale
+	}
+	return 0
+}
+
+func (x *Display) GetPrimary() bool {
+	if x != nil {
+		return x.Primary
+	}
+	return false
+}
+
+type DisplayTopologyEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Displays      []*Display             `protobuf:"bytes,2,rep,name=displays,proto3" json:"displays,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisplayTopologyEvent) Reset() {
+	*x = DisplayTopologyEvent{}
+	mi := &file_events_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisplayTopologyEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisplayTopologyEvent) ProtoMessage() {}
+
+func (x *DisplayTopologyEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_events_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisplayTopologyEvent.ProtoReflect.Descriptor instead.
+func (*DisplayTopologyEvent) Descriptor() ([]byte, []int) {
+	return file_events_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *DisplayTopologyEvent) GetTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Timestamp
+	}
+	return nil
+}
+
+func (x *DisplayTopologyEvent) GetDisplays() []*Display {
+	if x != nil {
+		return x.Displays
+	}
+	return nil
+}
+
 type Event struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Payload:
@@ -707,6 +827,7 @@ type Event struct {
 	//	*Event_Clipboard
 	//	*Event_Ocr
 	//	*Event_Generic
+	//	*Event_DisplayTopology
 	Payload       isEvent_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -714,7 +835,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_events_proto_msgTypes[9]
+	mi := &file_events_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -726,7 +847,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_events_proto_msgTypes[9]
+	mi := &file_events_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -739,7 +860,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_events_proto_rawDescGZIP(), []int{9}
+	return file_events_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Event) GetPayload() isEvent_Payload {
@@ -794,6 +915,15 @@ func (x *Event) GetGeneric() *GenericActivityEvent {
 	return nil
 }
 
+func (x *Event) GetDisplayTopology() *DisplayTopologyEvent {
+	if x != nil {
+		if x, ok := x.Payload.(*Event_DisplayTopology); ok {
+			return x.DisplayTopology
+		}
+	}
+	return nil
+}
+
 type isEvent_Payload interface {
 	isEvent_Payload()
 }
@@ -818,6 +948,10 @@ type Event_Generic struct {
 	Generic *GenericActivityEvent `protobuf:"bytes,5,opt,name=generic,proto3,oneof"`
 }
 
+type Event_DisplayTopology struct {
+	DisplayTopology *DisplayTopologyEvent `protobuf:"bytes,6,opt,name=display_topology,json=displayTopology,proto3,oneof"`
+}
+
 func (*Event_Window) isEvent_Payload() {}
 
 func (*Event_Mouse) isEvent_Payload() {}
@@ -827,6 +961,8 @@ func (*Event_Clipboard) isEvent_Payload() {}
 func (*Event_Ocr) isEvent_Payload() {}
 
 func (*Event_Generic) isEvent_Payload() {}
+
+func (*Event_DisplayTopology) isEvent_Payload() {}
 
 type TickBatch struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -840,7 +976,7 @@ type TickBatch struct {
 
 func (x *TickBatch) Reset() {
 	*x = TickBatch{}
-	mi := &file_events_proto_msgTypes[10]
+	mi := &file_events_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -852,7 +988,7 @@ func (x *TickBatch) String() string {
 func (*TickBatch) ProtoMessage() {}
 
 func (x *TickBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_events_proto_msgTypes[10]
+	mi := &file_events_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -865,7 +1001,7 @@ func (x *TickBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TickBatch.ProtoReflect.Descriptor instead.
 func (*TickBatch) Descriptor() ([]byte, []int) {
-	return file_events_proto_rawDescGZIP(), []int{10}
+	return file_events_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *TickBatch) GetTickIndex() int32 {
@@ -964,13 +1100,22 @@ const file_events_proto_rawDesc = "" +
 	"\x11deduplicated_from\x18\b \x01(\tR\x10deduplicatedFrom\"d\n" +
 	"\x14GenericActivityEvent\x128\n" +
 	"\ttimestamp\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\"\xd5\x02\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\"\x84\x01\n" +
+	"\aDisplay\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x05R\x02id\x129\n" +
+	"\x06bounds\x18\x02 \x01(\v2!.assessment.protocol.v1.RectangleR\x06bounds\x12\x14\n" +
+	"\x05scale\x18\x03 \x01(\x01R\x05scale\x12\x18\n" +
+	"\aprimary\x18\x04 \x01(\bR\aprimary\"\x8d\x01\n" +
+	"\x14DisplayTopologyEvent\x128\n" +
+	"\ttimestamp\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12;\n" +
+	"\bdisplays\x18\x02 \x03(\v2\x1f.assessment.protocol.v1.DisplayR\bdisplays\"\xb0\x03\n" +
 	"\x05Event\x12=\n" +
 	"\x06window\x18\x01 \x01(\v2#.assessment.protocol.v1.WindowEventH\x00R\x06window\x12:\n" +
 	"\x05mouse\x18\x02 \x01(\v2\".assessment.protocol.v1.MouseEventH\x00R\x05mouse\x12F\n" +
 	"\tclipboard\x18\x03 \x01(\v2&.assessment.protocol.v1.ClipboardEventH\x00R\tclipboard\x124\n" +
 	"\x03ocr\x18\x04 \x01(\v2 .assessment.protocol.v1.OCREventH\x00R\x03ocr\x12H\n" +
-	"\ageneric\x18\x05 \x01(\v2,.assessment.protocol.v1.GenericActivityEventH\x00R\agenericB\t\n" +
+	"\ageneric\x18\x05 \x01(\v2,.assessment.protocol.v1.GenericActivityEventH\x00R\ageneric\x12Y\n" +
+	"\x10display_topology\x18\x06 \x01(\v2,.assessment.protocol.v1.DisplayTopologyEventH\x00R\x0fdisplayTopologyB\t\n" +
 	"\apayload\"\xd3\x01\n" +
 	"\tTickBatch\x12\x1d\n" +
 	"\n" +
@@ -992,7 +1137,7 @@ func file_events_proto_rawDescGZIP() []byte {
 	return file_events_proto_rawDescData
 }
 
-var file_events_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_events_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_events_proto_goTypes = []any{
 	(*Point)(nil),                 // 0: assessment.protocol.v1.Point
 	(*Size)(nil),                  // 1: assessment.protocol.v1.Size
@@ -1003,35 +1148,41 @@ var file_events_proto_goTypes = []any{
 	(*OCRTextBlock)(nil),          // 6: assessment.protocol.v1.OCRTextBlock
 	(*OCREvent)(nil),              // 7: assessment.protocol.v1.OCREvent
 	(*GenericActivityEvent)(nil),  // 8: assessment.protocol.v1.GenericActivityEvent
-	(*Event)(nil),                 // 9: assessment.protocol.v1.Event
-	(*TickBatch)(nil),             // 10: assessment.protocol.v1.TickBatch
-	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
+	(*Display)(nil),               // 9: assessment.protocol.v1.Display
+	(*DisplayTopologyEvent)(nil),  // 10: assessment.protocol.v1.DisplayTopologyEvent
+	(*Event)(nil),                 // 11: assessment.protocol.v1.Event
+	(*TickBatch)(nil),             // 12: assessment.protocol.v1.TickBatch
+	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
 }
 var file_events_proto_depIdxs = []int32{
-	11, // 0: assessment.protocol.v1.WindowEvent.timestamp:type_name -> google.protobuf.Timestamp
+	13, // 0: assessment.protocol.v1.WindowEvent.timestamp:type_name -> google.protobuf.Timestamp
 	2,  // 1: assessment.protocol.v1.WindowEvent.window_rect:type_name -> assessment.protocol.v1.Rectangle
-	11, // 2: assessment.protocol.v1.MouseEvent.timestamp:type_name -> google.protobuf.Timestamp
+	13, // 2: assessment.protocol.v1.MouseEvent.timestamp:type_name -> google.protobuf.Timestamp
 	0,  // 3: assessment.protocol.v1.MouseEvent.position:type_name -> assessment.protocol.v1.Point
-	11, // 4: assessment.protocol.v1.ClipboardEvent.timestamp:type_name -> google.protobuf.Timestamp
+	13, // 4: assessment.protocol.v1.ClipboardEvent.timestamp:type_name -> google.protobuf.Timestamp
 	2,  // 5: assessment.protocol.v1.OCRTextBlock.box:type_name -> assessment.protocol.v1.Rectangle
-	11, // 6: assessment.protocol.v1.OCREvent.timestamp:type_name -> google.protobuf.Timestamp
+	13, // 6: assessment.protocol.v1.OCREvent.timestamp:type_name -> google.protobuf.Timestamp
 	1,  // 7: assessment.protocol.v1.OCREvent.resolution:type_name -> assessment.protocol.v1.Size
 	2,  // 8: assessment.protocol.v1.OCREvent.window_rect:type_name -> assessment.protocol.v1.Rectangle
 	6,  // 9: assessment.protocol.v1.OCREvent.blocks:type_name -> assessment.protocol.v1.OCRTextBlock
-	11, // 10: assessment.protocol.v1.GenericActivityEvent.timestamp:type_name -> google.protobuf.Timestamp
-	3,  // 11: assessment.protocol.v1.Event.window:type_name -> assessment.protocol.v1.WindowEvent
-	4,  // 12: assessment.protocol.v1.Event.mouse:type_name -> assessment.protocol.v1.MouseEvent
-	5,  // 13: assessment.protocol.v1.Event.clipboard:type_name -> assessment.protocol.v1.ClipboardEvent
-	7,  // 14: assessment.protocol.v1.Event.ocr:type_name -> assessment.protocol.v1.OCREvent
-	8,  // 15: assessment.protocol.v1.Event.generic:type_name -> assessment.protocol.v1.GenericActivityEvent
-	11, // 16: assessment.protocol.v1.TickBatch.start_time:type_name -> google.protobuf.Timestamp
-	11, // 17: assessment.protocol.v1.TickBatch.end_time:type_name -> google.protobuf.Timestamp
-	9,  // 18: assessment.protocol.v1.TickBatch.events:type_name -> assessment.protocol.v1.Event
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	13, // 10: assessment.protocol.v1.GenericActivityEvent.timestamp:type_name -> google.protobuf.Timestamp
+	2,  // 11: assessment.protocol.v1.Display.bounds:type_name -> assessment.protocol.v1.Rectangle
+	13, // 12: assessment.protocol.v1.DisplayTopologyEvent.timestamp:type_name -> google.protobuf.Timestamp
+	9,  // 13: assessment.protocol.v1.DisplayTopologyEvent.displays:type_name -> assessment.protocol.v1.Display
+	3,  // 14: assessment.protocol.v1.Event.window:type_name -> assessment.protocol.v1.WindowEvent
+	4,  // 15: assessment.protocol.v1.Event.mouse:type_name -> assessment.protocol.v1.MouseEvent
+	5,  // 16: assessment.protocol.v1.Event.clipboard:type_name -> assessment.protocol.v1.ClipboardEvent
+	7,  // 17: assessment.protocol.v1.Event.ocr:type_name -> assessment.protocol.v1.OCREvent
+	8,  // 18: assessment.protocol.v1.Event.generic:type_name -> assessment.protocol.v1.GenericActivityEvent
+	10, // 19: assessment.protocol.v1.Event.display_topology:type_name -> assessment.protocol.v1.DisplayTopologyEvent
+	13, // 20: assessment.protocol.v1.TickBatch.start_time:type_name -> google.protobuf.Timestamp
+	13, // 21: assessment.protocol.v1.TickBatch.end_time:type_name -> google.protobuf.Timestamp
+	11, // 22: assessment.protocol.v1.TickBatch.events:type_name -> assessment.protocol.v1.Event
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_events_proto_init() }
@@ -1039,12 +1190,13 @@ func file_events_proto_init() {
 	if File_events_proto != nil {
 		return
 	}
-	file_events_proto_msgTypes[9].OneofWrappers = []any{
+	file_events_proto_msgTypes[11].OneofWrappers = []any{
 		(*Event_Window)(nil),
 		(*Event_Mouse)(nil),
 		(*Event_Clipboard)(nil),
 		(*Event_Ocr)(nil),
 		(*Event_Generic)(nil),
+		(*Event_DisplayTopology)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1052,7 +1204,7 @@ func file_events_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_events_proto_rawDesc), len(file_events_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

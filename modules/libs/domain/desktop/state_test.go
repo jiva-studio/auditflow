@@ -184,7 +184,7 @@ func TestDesktopState_SpatialHitTesting_MultiDisplay(t *testing.T) {
 	}
 }
 
-func TestDesktopState_FallbackWithoutConfiguredDisplays(t *testing.T) {
+func TestDesktopState_FailsWithoutConfiguredTopology(t *testing.T) {
 	// State without predefined displays
 	state := desktop.NewState()
 
@@ -195,14 +195,10 @@ func TestDesktopState_FallbackWithoutConfiguredDisplays(t *testing.T) {
 		Blocks:     []display.OCRTextBlock{{Text: "Fallback Text", Box: box}},
 	})
 
+	// Without display topology, OCR event for unknown display is ignored and hit-test fails
 	text, hit := state.FindTextAt(geometry.Point{X: 150, Y: 120})
-	if !hit || text != "Fallback Text" {
-		t.Errorf("fallback hit-test failed: got %q, %v", text, hit)
-	}
-
-	_, miss := state.FindTextAt(geometry.Point{X: 500, Y: 500})
-	if miss {
-		t.Errorf("expected miss, got hit")
+	if hit || text != "" {
+		t.Errorf("expected hit test to fail without topology, got %q, %v", text, hit)
 	}
 }
 
@@ -548,7 +544,8 @@ func TestDesktopState_FacetsDirectAccess(t *testing.T) {
 	}
 
 	// Test SpatialFacet custom layer registration
-	spatialFacet := desktop.NewSpatialFacet()
+	d0 := createSampleDisplay(t, 0, 0, 0, 1920, 1080, 1.0, true)
+	spatialFacet := desktop.NewSpatialFacet(d0)
 	frame := display.OCRFrame{
 		Resolution: geometry.Size{Width: 1920, Height: 1080},
 		Blocks:     []display.OCRTextBlock{{Text: "Custom Layer Text", Box: geometry.Rectangle{X: 0, Y: 0, Width: 100, Height: 100}}},
@@ -560,8 +557,10 @@ func TestDesktopState_FacetsDirectAccess(t *testing.T) {
 }
 
 func TestDesktopState_DeterministicMultiLayerIteration(t *testing.T) {
-	// Create state with multiple displays and overlapping layer rectangles without displays configured
-	spatialFacet := desktop.NewSpatialFacet()
+	d1 := createSampleDisplay(t, 1, 0, 0, 1920, 1080, 1.0, false)
+	d2 := createSampleDisplay(t, 2, 0, 0, 1920, 1080, 1.0, false)
+	d3 := createSampleDisplay(t, 3, 0, 0, 1920, 1080, 1.0, false)
+	spatialFacet := desktop.NewSpatialFacet(d1, d2, d3)
 
 	// Register multiple layers (ID 1, 2, 3) with overlapping bounding boxes
 	box := geometry.Rectangle{X: 0, Y: 0, Width: 100, Height: 100}
@@ -601,12 +600,20 @@ func TestDesktopState_DeterministicMultiLayerIteration(t *testing.T) {
 	}
 }
 
-func TestDesktopState_AutoRegisterDisplay_NegativeCoordinatesAndNonStandardResolutions(t *testing.T) {
-	// Create state without predefined displays (as occurs in the live Agent)
+func TestDesktopState_DisplayTopologyEvent_NegativeCoordinatesAndNonStandardResolutions(t *testing.T) {
 	state := desktop.NewState()
 
-	// 1. Portrait secondary monitor with negative Y origin: [1954, -708], resolution 1080x1920
 	rectPort, _ := geometry.NewRectangle(1954, -708, 1080, 1920)
+	dPort, _ := display.NewDisplay(1, rectPort, 1.0, false)
+
+	rect4K, _ := geometry.NewRectangle(3050, -706, 3840, 2160)
+	d4K, _ := display.NewDisplay(2, rect4K, 1.5, false)
+
+	state.Apply(events.DisplayTopologyEvent{
+		Timestamp: time.Now(),
+		Displays:  []display.Display{dPort, d4K},
+	})
+
 	boxPort, _ := geometry.NewRectangle(100, 200, 300, 50)
 	state.Apply(events.OCREvent{
 		DisplayID:   1,
@@ -616,8 +623,6 @@ func TestDesktopState_AutoRegisterDisplay_NegativeCoordinatesAndNonStandardResol
 		Blocks:      []display.OCRTextBlock{{Text: "Portrait Header", Box: boxPort}},
 	})
 
-	// 2. 4K secondary monitor with negative Y origin: [3050, -706], resolution 3840x2160
-	rect4K, _ := geometry.NewRectangle(3050, -706, 3840, 2160)
 	box4K, _ := geometry.NewRectangle(200, 300, 500, 60)
 	state.Apply(events.OCREvent{
 		DisplayID:   2,
@@ -643,39 +648,6 @@ func TestDesktopState_AutoRegisterDisplay_NegativeCoordinatesAndNonStandardResol
 	_, hitMiss := state.FindTextAt(geometry.Point{X: 2000, Y: -100})
 	if hitMiss {
 		t.Errorf("expected miss on empty negative coordinates")
-	}
-}
-
-func TestDesktopState_FindInAllLayers_WithoutMagicResolution(t *testing.T) {
-	// State without configured displays or auto-registered displays
-	spatialFacet := desktop.NewSpatialFacet()
-
-	// 1. UltraWide OCR frame (3440x1440) registered as a layer directly
-	boxUW := geometry.Rectangle{X: 3000, Y: 1000, Width: 400, Height: 100}
-	spatialFacet.SetLayer(10, display.OCRFrame{
-		Resolution: geometry.Size{Width: 3440, Height: 1440},
-		Blocks:     []display.OCRTextBlock{{Text: "UltraWide Banner", Box: boxUW}},
-	})
-
-	// Point inside UltraWide frame at (3100, 1050) -> should hit without 1920x1080 cutoff
-	text, hit := spatialFacet.FindTextAt(geometry.Point{X: 3100, Y: 1050})
-	if !hit || text != "UltraWide Banner" {
-		t.Errorf("ultrawide hit-test failed: text=%q, hit=%v", text, hit)
-	}
-
-	// Point outside UltraWide bounds at (3500, 1050) -> should miss
-	_, miss := spatialFacet.FindTextAt(geometry.Point{X: 3500, Y: 1050})
-	if miss {
-		t.Errorf("expected miss for point outside UltraWide resolution")
-	}
-
-	// 2. Layer with zero resolution -> should safely return false without crashing
-	spatialFacet.SetLayer(11, display.OCRFrame{
-		Resolution: geometry.Size{Width: 0, Height: 0},
-		Blocks:     []display.OCRTextBlock{{Text: "Zero Res", Box: geometry.Rectangle{X: 0, Y: 0, Width: 10, Height: 10}}},
-	})
-	if _, hitZero := spatialFacet.FindTextAt(geometry.Point{X: 5, Y: 5}); hitZero {
-		t.Errorf("expected false for zero resolution layer without display")
 	}
 }
 

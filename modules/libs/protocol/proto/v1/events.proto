@@ -77,6 +77,18 @@ message GenericActivityEvent {
   string type = 2;
 }
 
+message Display {
+  int32 id = 1;
+  Rectangle bounds = 2;
+  double scale = 3;
+  bool primary = 4;
+}
+
+message DisplayTopologyEvent {
+  google.protobuf.Timestamp timestamp = 1;
+  repeated Display displays = 2;
+}
+
 message Event {
   oneof payload {
     WindowEvent window = 1;
@@ -84,6 +96,7 @@ message Event {
     ClipboardEvent clipboard = 3;
     OCREvent ocr = 4;
     GenericActivityEvent generic = 5;
+    DisplayTopologyEvent display_topology = 6;
   }
 }
 

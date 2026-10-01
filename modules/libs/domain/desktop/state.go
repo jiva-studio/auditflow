@@ -93,28 +93,35 @@ func (f *SpatialFacet) SetLayer(displayID int, layer display.SpatialLayer) {
 
 // Apply updates spatial layers from domain events.
 func (f *SpatialFacet) Apply(event events.Event) {
-	ev, ok := event.(events.OCREvent)
-	if !ok {
-		return
-	}
+	switch ev := event.(type) {
+	case events.DisplayTopologyEvent:
+		f.SetDisplays(ev.Displays)
+	case events.OCREvent:
+		if len(f.displays) == 0 {
+			return
+		}
+		targetDisplay, has := f.displays[ev.DisplayID]
+		if !has {
+			return
+		}
 
-	scale := ev.ScaleFactor
-	if scale <= 0 {
-		scale = 1.0
-	}
-	f.autoRegisterDisplay(ev, scale)
+		scale := ev.ScaleFactor
+		if scale <= 0 {
+			scale = targetDisplay.Scale
+		}
 
-	blocks := f.resolveOCRBlocks(ev)
+		blocks := f.resolveOCRBlocks(ev)
 
-	frame := display.OCRFrame{
-		DisplayID:   ev.DisplayID,
-		Resolution:  ev.Resolution,
-		ScaleFactor: scale,
-		Blocks:      blocks,
-		Timestamp:   ev.Timestamp,
-		Filename:    ev.Filename,
+		frame := display.OCRFrame{
+			DisplayID:   ev.DisplayID,
+			Resolution:  ev.Resolution,
+			ScaleFactor: scale,
+			Blocks:      blocks,
+			Timestamp:   ev.Timestamp,
+			Filename:    ev.Filename,
+		}
+		f.SetLayer(ev.DisplayID, frame)
 	}
-	f.SetLayer(ev.DisplayID, frame)
 }
 
 func (f *SpatialFacet) resolveOCRBlocks(ev events.OCREvent) []display.OCRTextBlock {
@@ -132,41 +139,15 @@ func (f *SpatialFacet) resolveOCRBlocks(ev events.OCREvent) []display.OCRTextBlo
 	return prevFrame.Blocks
 }
 
-func (f *SpatialFacet) autoRegisterDisplay(ev events.OCREvent, scale float64) {
-	if ev.Resolution.Width <= 0 || ev.Resolution.Height <= 0 {
-		return
-	}
-	if _, hasDisplay := f.displays[ev.DisplayID]; hasDisplay {
-		return
-	}
-
-	var origX, origY int
-	if ev.DisplayID != 0 {
-		origX = ev.WindowRect.X
-		origY = ev.WindowRect.Y
-	}
-
-	displayBounds := geometry.Rectangle{
-		X:      origX,
-		Y:      origY,
-		Width:  ev.Resolution.Width,
-		Height: ev.Resolution.Height,
-	}
-	disp, err := display.NewDisplay(ev.DisplayID, displayBounds, scale, ev.DisplayID == 0)
-	if err != nil {
-		return
-	}
-	if f.displays == nil {
-		f.displays = make(map[int]display.Display)
-	}
-	f.displays[ev.DisplayID] = disp
-}
-
 // FindTextAt performs spatial hit-testing across registered displays and visual layers.
 func (f *SpatialFacet) FindTextAt(point geometry.Point) (string, bool) {
+	if len(f.displays) == 0 {
+		return "", false
+	}
+
 	targetDisplay, found := f.findDisplayForPoint(point)
 	if !found {
-		return f.findInAllLayers(point)
+		return "", false
 	}
 
 	localPt, ok := targetDisplay.MapToLocal(point)
@@ -212,32 +193,6 @@ func (f *SpatialFacet) findDisplayForPoint(point geometry.Point) (display.Displa
 		}
 	}
 	return display.Display{}, false
-}
-
-func (f *SpatialFacet) findInAllLayers(point geometry.Point) (string, bool) {
-	for _, displayID := range f.sortedLayerIDs() {
-		layer := f.layers[displayID]
-		d, hasDisplay := f.displays[displayID]
-
-		var bounds geometry.Rectangle
-		if hasDisplay {
-			bounds = d.Bounds
-		} else if frame, ok := layer.(display.OCRFrame); ok && frame.Resolution.Width > 0 && frame.Resolution.Height > 0 {
-			bounds = geometry.Rectangle{
-				X:      0,
-				Y:      0,
-				Width:  frame.Resolution.Width,
-				Height: frame.Resolution.Height,
-			}
-		} else {
-			continue
-		}
-
-		if hit, hitFound := layer.HitTest(point, bounds); hitFound {
-			return hit.Text, true
-		}
-	}
-	return "", false
 }
 
 // AllTexts returns all visible text strings from all spatial layers in deterministic order.

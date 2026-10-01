@@ -24,14 +24,15 @@ type EventType string
 
 // Supported domain event types.
 const (
-	EventTypeWindow      EventType = "window"
-	EventTypeMouse       EventType = "mouse"
-	EventTypeClipboard   EventType = "clipboard"
-	EventTypeOCR         EventType = "ocr"
-	EventTypeKeyboard    EventType = "keyboard"
-	EventTypeKeystroke   EventType = "keystroke"
-	EventTypeMouseDrag   EventType = "mouse_drag"
-	EventTypeMouseScroll EventType = "mouse_scroll"
+	EventTypeWindow          EventType = "window"
+	EventTypeMouse           EventType = "mouse"
+	EventTypeClipboard       EventType = "clipboard"
+	EventTypeOCR             EventType = "ocr"
+	EventTypeKeyboard        EventType = "keyboard"
+	EventTypeKeystroke       EventType = "keystroke"
+	EventTypeMouseDrag       EventType = "mouse_drag"
+	EventTypeMouseScroll     EventType = "mouse_scroll"
+	EventTypeDisplayTopology EventType = "display_topology"
 )
 
 // Event is the interface that all domain events implement.
@@ -123,6 +124,18 @@ func (e GenericActivityEvent) GetTimestamp() time.Time { return e.Timestamp }
 
 // GetType returns the generic event type.
 func (e GenericActivityEvent) GetType() EventType { return e.Type }
+
+// DisplayTopologyEvent communicates the physical/virtual display layout of the workstation.
+type DisplayTopologyEvent struct {
+	Timestamp time.Time
+	Displays  []display.Display
+}
+
+// GetTimestamp returns the event timestamp.
+func (e DisplayTopologyEvent) GetTimestamp() time.Time { return e.Timestamp }
+
+// GetType returns EventTypeDisplayTopology.
+func (e DisplayTopologyEvent) GetType() EventType { return EventTypeDisplayTopology }
 
 // TickBatch represents a batch of events occurring within a 1-second interval.
 type TickBatch struct {

@@ -1,5 +1,62 @@
 {
   "employee_id": "emp-1",
-  "total_popups": 0,
-  "popups": []
+  "total_popups": 8,
+  "popups": [
+    {
+      "employee": "emp-1",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T23:15:21Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Updated floor plan - booth 1813"
+    },
+    {
+      "employee": "emp-1",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T23:15:27Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: URGENT - booth payment overdue"
+    },
+    {
+      "employee": "emp-1",
+      "rule": "urgent-email-opened",
+      "ts": "2026-03-10T23:15:27Z",
+      "title": "Urgent email",
+      "body": "FW: URGENT - booth payment overdue"
+    },
+    {
+      "employee": "emp-1",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T23:15:28Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: URGENT - booth payment overdue"
+    },
+    {
+      "employee": "emp-1",
+      "rule": "urgent-email-opened",
+      "ts": "2026-03-10T23:15:28Z",
+      "title": "Urgent email",
+      "body": "FW: URGENT - booth payment overdue"
+    },
+    {
+      "employee": "emp-1",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T23:15:47Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Revised hotel block contract"
+    },
+    {
+      "employee": "emp-1",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T23:15:47Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Revised hotel block contract"
+    },
+    {
+      "employee": "emp-1",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T23:52:37Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Carpet colour options for booth 507"
+    }
+  ]
 }

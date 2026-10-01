@@ -22,6 +22,8 @@ func ToProtoEvent(ev events.Event) *v1.Event {
 		return ToProtoOCREvent(e)
 	case events.GenericActivityEvent:
 		return ToProtoGenericEvent(e)
+	case events.DisplayTopologyEvent:
+		return ToProtoDisplayTopologyEvent(e)
 	default:
 		return nil
 	}
@@ -120,5 +122,31 @@ func ToProtoGenericEvent(e events.GenericActivityEvent) *v1.Event {
 				Type:      string(e.Type),
 			},
 		},
+	}
+}
+
+// ToProtoDisplayTopologyEvent maps a DisplayTopologyEvent domain entity to Protobuf.
+func ToProtoDisplayTopologyEvent(e events.DisplayTopologyEvent) *v1.Event {
+	displays := make([]*v1.Display, len(e.Displays))
+	for i, d := range e.Displays {
+		displays[i] = ToProtoDisplay(d)
+	}
+	return &v1.Event{
+		Payload: &v1.Event_DisplayTopology{
+			DisplayTopology: &v1.DisplayTopologyEvent{
+				Timestamp: timestamppb.New(e.Timestamp),
+				Displays:  displays,
+			},
+		},
+	}
+}
+
+// ToProtoDisplay maps a Display value object to Protobuf.
+func ToProtoDisplay(d display.Display) *v1.Display {
+	return &v1.Display{
+		Id:      int32(d.ID),
+		Bounds:  ToProtoRectangle(d.Bounds),
+		Scale:   d.Scale,
+		Primary: d.Primary,
 	}
 }

@@ -55,6 +55,8 @@ func ToDomainEvent(raw *v1.Event) events.Event {
 		return ToDomainOCREvent(p.Ocr)
 	case *v1.Event_Generic:
 		return ToDomainGenericEvent(p.Generic)
+	case *v1.Event_DisplayTopology:
+		return ToDomainDisplayTopologyEvent(p.DisplayTopology)
 	default:
 		return nil
 	}
@@ -142,4 +144,31 @@ func ToDomainGenericEvent(g *v1.GenericActivityEvent) events.GenericActivityEven
 		Timestamp: g.GetTimestamp().AsTime(),
 		Type:      events.EventType(g.GetType()),
 	}
+}
+
+// ToDomainDisplayTopologyEvent maps a Protobuf DisplayTopologyEvent to domain DisplayTopologyEvent.
+func ToDomainDisplayTopologyEvent(d *v1.DisplayTopologyEvent) events.DisplayTopologyEvent {
+	if d == nil {
+		return events.DisplayTopologyEvent{}
+	}
+	rawDisplays := d.GetDisplays()
+	displays := make([]display.Display, 0, len(rawDisplays))
+	for _, rd := range rawDisplays {
+		if disp, err := ToDomainDisplay(rd); err == nil {
+			displays = append(displays, disp)
+		}
+	}
+	return events.DisplayTopologyEvent{
+		Timestamp: d.GetTimestamp().AsTime(),
+		Displays:  displays,
+	}
+}
+
+// ToDomainDisplay maps a Protobuf Display message to domain Display value object.
+func ToDomainDisplay(d *v1.Display) (display.Display, error) {
+	if d == nil {
+		return display.Display{}, display.ErrInvalidDisplayBounds
+	}
+	bounds := ToDomainRectangle(d.GetBounds())
+	return display.NewDisplay(int(d.GetId()), bounds, d.GetScale(), d.GetPrimary())
 }
