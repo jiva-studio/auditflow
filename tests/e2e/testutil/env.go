@@ -60,14 +60,14 @@ func GetServerBin(t *testing.T) string {
 	return filepath.Join(FindProjectRoot(t), "bin", "server")
 }
 
-// GetRulesPath returns the path to data/rules.json
+// GetRulesPath returns the path to rules.json
 func GetRulesPath(t *testing.T) string {
 	t.Helper()
 	rulesPath := os.Getenv("RULES_PATH")
 	if rulesPath != "" {
 		return rulesPath
 	}
-	return filepath.Join(FindProjectRoot(t), "data", "rules.json")
+	return filepath.Join(FindProjectRoot(t), "rules.json")
 }
 
 // GetDataDir returns the path to real test recordings

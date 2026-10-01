@@ -19,7 +19,7 @@ build:
 	cd $(ROOT_DIR)/modules/apps/server && go build -o $(SERVER_BIN) ./cmd/main.go
 
 test: build
-	STREAMER_BIN=$(STREAMER_BIN) AGENT_BIN=$(AGENT_BIN) SERVER_BIN=$(SERVER_BIN) DATA_DIR=$(ROOT_DIR)/data RULES_PATH=$(ROOT_DIR)/data/rules.json go test -v -count=1 ./...
+	STREAMER_BIN=$(STREAMER_BIN) AGENT_BIN=$(AGENT_BIN) SERVER_BIN=$(SERVER_BIN) DATA_DIR=$(ROOT_DIR)/data RULES_PATH=$(ROOT_DIR)/rules.json go test -v -count=1 ./...
 
 clean:
 	rm -f $(STREAMER_BIN) $(AGENT_BIN) $(SERVER_BIN)

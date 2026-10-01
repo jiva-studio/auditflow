@@ -112,6 +112,16 @@ streamer_mutate:
 	cd modules/apps/streamer && $(MUTATE_CMD)
 
 # ==============================================================================
+# APPS / RUNNER
+# ==============================================================================
+
+runner_test:
+	cd modules/apps/runner && go test -count=1 ./...
+
+runner_lint:
+	cd modules/apps/runner && golangci-lint run ./...
+
+# ==============================================================================
 # TESTS / E2E
 # ==============================================================================
 
@@ -139,7 +149,10 @@ build_agent:
 build_streamer:
 	cd modules/apps/streamer && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../../../bin/streamer ./cmd/main.go
 
-build: build_server build_agent build_streamer
+build_runner:
+	cd modules/apps/runner && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../../../bin/runner ./cmd/main.go
+
+build: build_server build_agent build_streamer build_runner
 
 
 

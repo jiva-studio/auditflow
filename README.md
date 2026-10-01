@@ -8,17 +8,17 @@ AuditFlow is a distributed, real-time employee workstation telemetry and complia
 
 ### Quick Start with Docker Compose (Recommended)
 
-To run the complete system (Central Server, 3 Employee Agents, and 3 Streamers replaying real workstation telemetry sessions) from scratch on any machine:
+To run the complete system (Central Server and Replay Runner processing all `./data/*.tar.gz` recordings against `./rules.json`) from scratch:
 
 ```bash
 docker compose up --build
 ```
 
 #### Fast-Forward Execution (Zero-Delay Replay)
-By default, the replay streamer respects the simulated workstation tick cadence (`TICK_MS=10`). To execute the full replay instantly at maximum CPU and network throughput:
+By default, the replay streamer respects the simulated workstation tick cadence (`TICK_MS=10`). To execute the full replay instantly at maximum throughput:
 
 ```bash
-TICK_MS=0 docker compose up --abort-on-container-exit --exit-code-from streamer-emp-1
+TICK_MS=0 docker compose up --abort-on-container-exit --exit-code-from runner
 ```
 
 ### Querying Compliance Audit Results

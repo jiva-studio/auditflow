@@ -70,7 +70,7 @@ func run(loggers ...*slog.Logger) error {
 
 func loadConfig() (appConfig, error) {
 	port := getEnv("PORT", "8081")
-	rulesPath := getEnv("RULES_PATH", "/data/rules.json")
+	rulesPath := getEnv("RULES_PATH", "/rules.json")
 	serverURL := getEnv("SERVER_URL", "http://server:8080")
 	employeeID := getEnv("EMPLOYEE_ID", "emp-1")
 	timeoutMSStr := getEnv("SERVER_TIMEOUT_MS", "5000")
