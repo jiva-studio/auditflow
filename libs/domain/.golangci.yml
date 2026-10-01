@@ -1,0 +1,46 @@
+version: "2"
+
+linters:
+  enable:
+    # Complexity & Nesting
+    - cyclop          # Cyclomatic complexity check
+    - gocognit        # Cognitive complexity check
+    - nestif          # Deeply nested if statements
+    - funlen          # Function length limits
+
+    # Correctness & Code Smells
+    - govet           # Standard Go vet tool
+    - errcheck        # Unchecked errors
+    - staticcheck     # Static analysis
+    - gocritic        # Opinionated code smell linter
+    - revive          # Fast, configurable linter
+    - ineffassign     # Detects unused assignments
+    - unused          # Unused code
+    - misspell        # Spell checks in comments and code
+
+linters-settings:
+  cyclop:
+    max-complexity: 12
+    package-average: 6.0
+  gocognit:
+    min-complexity: 15
+  nestif:
+    min-complexity: 3
+  funlen:
+    lines: 70
+    statements: 45
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+      - name: package-comments
+        disabled: false
+      - name: error-naming
+        disabled: false
+      - name: error-strings
+        disabled: false
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
