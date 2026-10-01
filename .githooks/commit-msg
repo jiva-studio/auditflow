@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -e
+
+MSG_FILE="$1"
+COMMIT_MSG=$(head -n 1 "$MSG_FILE")
+
+# Allow fixup/squash commits
+if echo "$COMMIT_MSG" | grep -qE '^(fixup!|squash!)'; then
+  exit 0
+fi
+
+# Conventional Commit regex
+PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_\-\./]+\))?:\s.+$'
+
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+  echo "❌ Error: Invalid commit message format."
+  echo "Commit message: \"$COMMIT_MSG\""
+  echo ""
+  echo "Your message must follow the Conventional Commits specification:"
+  echo "  <type>(<optional scope>): <subject>"
+  echo ""
+  echo "Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+  echo "Examples:"
+  echo "  feat(agent): implement desktop state machine"
+  echo "  test(server): add audit API integration tests"
+  echo "  chore: update Makefile targets"
+  exit 1
+fi

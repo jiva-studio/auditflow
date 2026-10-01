@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -e
+
+# 1. Get all staged files that are Added, Copied, or Modified
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+# Helper to run commands with Nix / local environment fallback
+run_in_env() {
+  local cmd="$1"
+  if command -v go >/dev/null 2>&1 && command -v golangci-lint >/dev/null 2>&1; then
+    eval "$cmd"
+  elif command -v nix-shell >/dev/null 2>&1; then
+    nix-shell -p gnumake go golangci-lint --run "$cmd"
+  else
+    eval "$cmd"
+  fi
+}
+
+# 2. Check formatting for staged Go files
+GO_FILES=$(echo "$STAGED_FILES" | grep '\.go$' || true)
+if [ -n "$GO_FILES" ]; then
+  UNFORMATTED=$(run_in_env "gofmt -l $GO_FILES" || true)
+  if [ -n "$UNFORMATTED" ]; then
+    echo "❌ Error: The following staged Go files are not formatted with gofmt:"
+    echo "$UNFORMATTED"
+    echo "Please format them and stage again."
+    exit 1
+  fi
+fi
+
+# 3. Dynamically discover all changed Go modules (nearest directory with go.mod)
+CHANGED_MODULES=()
+for file in $STAGED_FILES; do
+  dir=$(dirname "$file")
+  while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+    if [ -f "$dir/go.mod" ]; then
+      if [[ ! " ${CHANGED_MODULES[*]} " =~ " ${dir} " ]]; then
+        CHANGED_MODULES+=("$dir")
+      fi
+      break
+    fi
+    dir=$(dirname "$dir")
+  done
+done
+
+# 4. Run tests and lint for each modified module
+for mod_dir in "${CHANGED_MODULES[@]}"; do
+  mod_name=$(basename "$mod_dir")
+  echo "🔍 [pre-commit] Testing & linting module: $mod_name ($mod_dir)..."
+  run_in_env "cd $mod_dir && go test -count=1 ./... && golangci-lint run ./..."
+done
