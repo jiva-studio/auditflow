@@ -12,7 +12,7 @@ all: test
 
 build:
 	@mkdir -p $(BIN_DIR)
-	cd $(ROOT_DIR)/modules/streamer && go build -o $(STREAMER_BIN) ./cmd/main.go
+	cd $(ROOT_DIR)/modules/apps/streamer && go build -o $(STREAMER_BIN) ./cmd/main.go
 
 test: build
 	STREAMER_BIN=$(STREAMER_BIN) DATA_DIR=$(ROOT_DIR)/data go test -v -count=1 ./...

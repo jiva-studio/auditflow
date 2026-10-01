@@ -15,7 +15,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	v1 "assessment/libs/protocol/gen/go/v1"
+	v1 "assessment/modules/libs/protocol/gen/go/v1"
 	"assessment/tests/e2e/testutil"
 )
 

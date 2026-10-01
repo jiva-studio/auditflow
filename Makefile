@@ -14,7 +14,7 @@ MUTATE_CMD ?= go run github.com/go-gremlins/gremlins/cmd/gremlins@latest unleash
         e2e_test
 
 fmt:
-	gofmt -s -w libs/ modules/ tests/
+	gofmt -s -w modules/ tests/
 
 # ==============================================================================
 # LIBS / DOMAIN
@@ -25,79 +25,79 @@ domain_guard:
 	python3 scripts/guards/domain/no_io.py
 
 domain_test:
-	cd libs/domain && go test -count=1 ./...
+	cd modules/libs/domain && go test -count=1 ./...
 
 domain_lint:
-	cd libs/domain && golangci-lint run ./...
+	cd modules/libs/domain && golangci-lint run ./...
 
 domain_mutate:
-	cd libs/domain && $(MUTATE_CMD)
+	cd modules/libs/domain && $(MUTATE_CMD)
 
 # ==============================================================================
 # LIBS / PROTOCOL
 # ==============================================================================
 
 protocol_gen:
-	protoc -I libs/protocol/proto/v1 --go_out=libs/protocol/gen/go/v1 --go_opt=paths=source_relative libs/protocol/proto/v1/events.proto libs/protocol/proto/v1/audit.proto
+	protoc -I modules/libs/protocol/proto/v1 --go_out=modules/libs/protocol/gen/go/v1 --go_opt=paths=source_relative modules/libs/protocol/proto/v1/events.proto modules/libs/protocol/proto/v1/audit.proto
 
 protocol_test:
-	cd libs/protocol && go test -count=1 ./...
+	cd modules/libs/protocol && go test -count=1 ./...
 
 protocol_lint:
-	cd libs/protocol && golangci-lint run ./...
+	cd modules/libs/protocol && golangci-lint run ./...
 
 # ==============================================================================
 # LIBS / RULES
 # ==============================================================================
 
 rules_test:
-	cd libs/rules && go test -count=1 ./...
+	cd modules/libs/rules && go test -count=1 ./...
 
 rules_lint:
-	cd libs/rules && golangci-lint run ./...
+	cd modules/libs/rules && golangci-lint run ./...
 
 rules_mutate:
-	cd libs/rules && $(MUTATE_CMD)
+	cd modules/libs/rules && $(MUTATE_CMD)
 
 
 # ==============================================================================
-# MODULES / AGENT
+# APPS / AGENT
 # ==============================================================================
 
 agent_test:
-	cd modules/agent && go test -count=1 ./...
+	cd modules/apps/agent && go test -count=1 ./...
 
 agent_lint:
-	cd modules/agent && golangci-lint run ./...
+	cd modules/apps/agent && golangci-lint run ./...
 
 agent_mutate:
-	cd modules/agent && $(MUTATE_CMD)
+	cd modules/apps/agent && $(MUTATE_CMD)
 
 # ==============================================================================
-# MODULES / SERVER
+# APPS / SERVER
 # ==============================================================================
 
 server_test:
-	cd modules/server && go test -count=1 ./...
+	cd modules/apps/server && go test -count=1 ./...
 
 server_lint:
-	cd modules/server && golangci-lint run ./...
+	cd modules/apps/server && golangci-lint run ./...
 
 server_mutate:
-	cd modules/server && $(MUTATE_CMD)
+	cd modules/apps/server && $(MUTATE_CMD)
 
 # ==============================================================================
-# MODULES / STREAMER
+# APPS / STREAMER
 # ==============================================================================
 
 streamer_test:
-	cd modules/streamer && go test -count=1 ./...
+	cd modules/apps/streamer && go test -count=1 ./...
 
 streamer_lint:
-	cd modules/streamer && golangci-lint run ./...
+	cd modules/apps/streamer && golangci-lint run ./...
 
 streamer_mutate:
-	cd modules/streamer && $(MUTATE_CMD)
+	cd modules/apps/streamer && $(MUTATE_CMD)
 
 # ==============================================================================
 # TESTS / E2E

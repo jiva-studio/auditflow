@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-DOMAIN_DIR = ROOT / "libs" / "domain"
+DOMAIN_DIR = ROOT / "modules" / "libs" / "domain"
 FORBIDDEN = ('"net/http"', '"database/sql"', '"os/exec"')
 
 
