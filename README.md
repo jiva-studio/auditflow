@@ -68,12 +68,16 @@ make e2e_test
 make domain_guard
 
 # Run unit tests and linters by module:
-make domain_test domain_lint     # Domain library
-make protocol_test protocol_lint # Protobuf v1 contracts
-make rules_test rules_lint       # Rule engine and JSON loader
-make agent_test agent_lint       # Employee Agent microservice
-make server_test server_lint     # Central Audit Server microservice
-make streamer_test streamer_lint # Replay Streamer microservice
+make domain_test domain_lint       # Domain library
+make protocol_test protocol_lint   # Protobuf v1 contracts
+make rules_test rules_lint         # Rule engine and JSON loader
+make telemetry_test telemetry_lint # Telemetry, slog, and tracing library
+make agent_test agent_lint         # Employee Agent microservice
+make server_test server_lint       # Central Audit Server microservice
+make streamer_test streamer_lint   # Replay Streamer microservice
+
+# Build static production binaries into bin/
+make build
 
 # Run mutation testing
 make agent_mutate
@@ -92,6 +96,9 @@ The codebase strictly follows **Clean / Hexagonal Architecture** and **Domain-Dr
 
 ```text
 assessment/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                   # Automated CI/CD pipeline (Lint, Test, E2E, Build, Artifacts)
 ├── modules/
 │   ├── apps/                        # Microservices (Hexagonal Architecture)
 │   │   ├── agent/                   # Employee workstation audit agent
@@ -121,7 +128,8 @@ assessment/
 │       ├── protocol/                # Protobuf v1 schemas and generated Go structs
 │       │   ├── proto/v1/            # audit.proto, events.proto
 │       │   └── gen/go/v1/           # Generated Protobuf serialization code
-│       └── rules/                   # Rule parser, DTOs, and flexible JSON deserializer
+│       ├── rules/                   # Rule parser, DTOs, and flexible JSON deserializer
+│       └── telemetry/               # Structured slog logger, context trace ID propagation & middleware
 ├── tests/e2e/                       # End-to-end integration test suites
 │   ├── agent/                       # Agent rule evaluation tests on real sessions
 │   ├── server/                      # Full pipeline end-to-end tests
@@ -151,4 +159,16 @@ Key technical and architectural decisions are formally documented in Architectur
    * *Rationale*: Quality assurance built on a multi-layer test pyramid: unit tests for all domain invariants, integration tests with mocked transports, E2E tests over real recordings, stress tests with memory bounds (`GOMEMLIMIT`), and 100% mutation testing efficacy via Gremlins.
 5. **[ADR-0005: Automated Architectural Fitness Functions](file:///home/akd/Projects/assessment/docs/adr/0005-automated-architectural-fitness-functions.md)**
    * *Rationale*: Automated AST guards run in pre-commit hooks to mathematically prevent architectural erosion (verifying AST nodes for forbidden imports like `os`, `net/http`, `io`, and struct tags like `json:`).
+
+---
+
+## 5. Continuous Integration & Delivery (CI/CD)
+
+The automated [GitHub Actions CI/CD Pipeline](file:///home/akd/Projects/assessment/.github/workflows/ci.yml) enforces quality gates on every Pull Request and commit to `main`:
+
+* **Stage 1: Quality Gates & Fitness Functions**: Verifies code formatting with `gofmt`, executes Python AST domain purity guards (`no_json.py`, `no_io.py`), and runs `golangci-lint` across all Go modules.
+* **Stage 2: Unit & Integration Tests**: Runs test suites with Go race detector (`-race`) and generates aggregated coverage profiles.
+* **Stage 3: End-to-End System Tests**: Executes the full integration test pipeline across Streamer, Agent, and Server.
+* **Stage 4: Binary Compilation & Docker Packaging**: Statically compiles Go binaries (`bin/server`, `bin/agent`, `bin/streamer`), uploads them as downloadable workflow artifacts, and verifies multi-stage Docker image builds.
+
 

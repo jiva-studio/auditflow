@@ -12,7 +12,8 @@ MUTATE_CMD ?= go run github.com/go-gremlins/gremlins/cmd/gremlins@latest unleash
         agent_test agent_lint agent_mutate \
         server_test server_lint server_mutate \
         streamer_test streamer_lint streamer_mutate \
-        e2e_test
+        e2e_test \
+        build build_server build_agent build_streamer
 
 fmt:
 	gofmt -s -w modules/ tests/
@@ -124,4 +125,21 @@ server_e2e_test:
 	$(MAKE) -C tests/e2e/server test
 
 e2e_test: streamer_e2e_test agent_e2e_test server_e2e_test
+
+# ==============================================================================
+# BUILD TARGETS
+# ==============================================================================
+
+build_server:
+	cd modules/apps/server && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../../../bin/server ./cmd/main.go
+
+build_agent:
+	cd modules/apps/agent && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../../../bin/agent ./cmd/main.go
+
+build_streamer:
+	cd modules/apps/streamer && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../../../bin/streamer ./cmd/main.go
+
+build: build_server build_agent build_streamer
+
+
 
