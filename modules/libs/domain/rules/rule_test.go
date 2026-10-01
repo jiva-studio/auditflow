@@ -236,3 +236,41 @@ func TestRule_RequiresClick(t *testing.T) {
 		t.Error("expected rClip.RequiresClick() to be false")
 	}
 }
+
+func TestRule_UnresolvedPlaceholderCleanup(t *testing.T) {
+	tmpl, err := NewPopupTemplate(
+		"Action in {window_title} ({process})",
+		"Clicked {click}, copied: {clipboard}, OCR: {ocr}, meta: {unknown}",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	clickPat, _ := NewPatternList("Save")
+	rule, err := NewRule("unresolved-cleanup-rule", WhenConditions{
+		Click: &clickPat,
+	}, tmpl)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Evaluation context only provides ClickText; window_title, process, clipboard, ocr, unknown are omitted
+	ctx := RuleEvaluationContext{
+		ClickText: "Save",
+	}
+
+	title, body, matched := rule.Evaluate(ctx)
+	if !matched {
+		t.Fatal("expected rule to match")
+	}
+
+	expectedTitle := "Action in  ()"
+	expectedBody := "Clicked Save, copied: , OCR: , meta: "
+
+	if title != expectedTitle {
+		t.Errorf("got title %q, want %q", title, expectedTitle)
+	}
+	if body != expectedBody {
+		t.Errorf("got body %q, want %q", body, expectedBody)
+	}
+}
