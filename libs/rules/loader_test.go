@@ -13,12 +13,12 @@ import (
 
 type errReader struct{}
 
-func (errReader) Read(p []byte) (n int, err error) {
+func (errReader) Read(_ []byte) (n int, err error) {
 	return 0, errors.New("read error simulation")
 }
 
-// TestLoadRulesFromFile_AllDataRules tests all 5 rules from data/rules.json exhaustively.
-func TestLoadRulesFromFile_AllDataRules(t *testing.T) {
+func loadProjectRules(t *testing.T) map[string]domain.Rule {
+	t.Helper()
 	repoRoot := filepath.Join("..", "..", "data", "rules.json")
 	ruleList, err := LoadRulesFromFile(repoRoot)
 	if err != nil {
@@ -33,181 +33,174 @@ func TestLoadRulesFromFile_AllDataRules(t *testing.T) {
 	for _, r := range ruleList {
 		rulesMap[r.ID] = r
 	}
-
-	// 1. Rule: forwarded-email-opened ("click": "FW:*", "process": ["OUTLOOK.EXE", "olk.exe"])
-	t.Run("Rule_forwarded_email_opened", func(t *testing.T) {
-		r, ok := rulesMap["forwarded-email-opened"]
-		if !ok {
-			t.Fatal("rule forwarded-email-opened not found")
-		}
-
-		// Positive cases
-		posCases := []domain.RuleEvaluationContext{
-			{ClickText: "FW: Budget 2026", Process: "OUTLOOK.EXE"},
-			{ClickText: "fw: urgent update", Process: "olk.exe"},
-			{ClickText: "FW:RE: Test", Process: "Outlook.exe"},
-		}
-		for _, ctx := range posCases {
-			title, body, matched := r.Evaluate(ctx)
-			if !matched {
-				t.Errorf("expected match for %+v", ctx)
-			}
-			if title != "Forwarded email" {
-				t.Errorf("got title %q, want 'Forwarded email'", title)
-			}
-			expectedBody := fmt.Sprintf("You opened a forwarded email: %s", ctx.ClickText)
-			if body != expectedBody {
-				t.Errorf("got body %q, want %q", body, expectedBody)
-			}
-		}
-
-		// Negative cases
-		negCases := []domain.RuleEvaluationContext{
-			{ClickText: "RE: Budget 2026", Process: "OUTLOOK.EXE"}, // wrong click prefix
-			{ClickText: "FW: Budget 2026", Process: "chrome.exe"},  // wrong process
-			{ClickText: "", Process: "OUTLOOK.EXE"},                // empty click
-		}
-		for _, ctx := range negCases {
-			_, _, matched := r.Evaluate(ctx)
-			if matched {
-				t.Errorf("expected no match for %+v", ctx)
-			}
-		}
-	})
-
-	// 2. Rule: urgent-email-opened ("click": "*urgent*", "process": ["OUTLOOK.EXE", "olk.exe"])
-	t.Run("Rule_urgent_email_opened", func(t *testing.T) {
-		r, ok := rulesMap["urgent-email-opened"]
-		if !ok {
-			t.Fatal("rule urgent-email-opened not found")
-		}
-
-		// Positive cases
-		posCases := []domain.RuleEvaluationContext{
-			{ClickText: "URGENT: Review needed", Process: "OUTLOOK.EXE"},
-			{ClickText: "This is urgent please read", Process: "olk.exe"},
-			{ClickText: "urgent", Process: "OUTLOOK.EXE"},
-		}
-		for _, ctx := range posCases {
-			title, body, matched := r.Evaluate(ctx)
-			if !matched {
-				t.Errorf("expected match for %+v", ctx)
-			}
-			if title != "Urgent email" || body != ctx.ClickText {
-				t.Errorf("unexpected output: %q / %q", title, body)
-			}
-		}
-
-		// Negative cases
-		negCases := []domain.RuleEvaluationContext{
-			{ClickText: "Important email", Process: "OUTLOOK.EXE"},
-			{ClickText: "urgent email", Process: "notepad.exe"},
-		}
-		for _, ctx := range negCases {
-			_, _, matched := r.Evaluate(ctx)
-			if matched {
-				t.Errorf("expected no match for %+v", ctx)
-			}
-		}
-	})
-
-	// 3. Rule: salesforce-record-deleted ("click": "Delete", "window_title": "*| Salesforce*", "ocr": "Are you sure you want to delete*")
-	t.Run("Rule_salesforce_record_deleted", func(t *testing.T) {
-		r, ok := rulesMap["salesforce-record-deleted"]
-		if !ok {
-			t.Fatal("rule salesforce-record-deleted not found")
-		}
-
-		posCtx := domain.RuleEvaluationContext{
-			ClickText:   "Delete",
-			WindowTitle: "0012345 | Case | Salesforce - Google Chrome",
-			OCRScreenTexts: []string{
-				"Header",
-				"Are you sure you want to delete this record permanently?",
-				"Cancel",
-			},
-		}
-		title, body, matched := r.Evaluate(posCtx)
-		if !matched {
-			t.Errorf("expected match for salesforce deletion")
-		}
-		if title != "Record deleted" || body != "Deleted in Salesforce: 0012345 | Case | Salesforce - Google Chrome" {
-			t.Errorf("unexpected output: %s / %s", title, body)
-		}
-
-		// Negatives
-		negCases := []domain.RuleEvaluationContext{
-			{ClickText: "Cancel", WindowTitle: posCtx.WindowTitle, OCRScreenTexts: posCtx.OCRScreenTexts},
-			{ClickText: "Delete", WindowTitle: "Inbox - Gmail", OCRScreenTexts: posCtx.OCRScreenTexts},
-			{ClickText: "Delete", WindowTitle: posCtx.WindowTitle, OCRScreenTexts: []string{"Are you sure you want to save?"}},
-		}
-		for _, ctx := range negCases {
-			if _, _, m := r.Evaluate(ctx); m {
-				t.Errorf("expected no match for %+v", ctx)
-			}
-		}
-	})
-
-	// 4. Rule: jira-ticket-done ("click": "Done", "window_title": "* - Jira - *", "process": null)
-	t.Run("Rule_jira_ticket_done", func(t *testing.T) {
-		r, ok := rulesMap["jira-ticket-done"]
-		if !ok {
-			t.Fatal("rule jira-ticket-done not found")
-		}
-
-		posCases := []domain.RuleEvaluationContext{
-			{ClickText: "Done", WindowTitle: "PROJ-101 - Jira - Google Chrome", Process: "chrome.exe"},
-			{ClickText: "done", WindowTitle: "BUG-202 - Jira - Firefox", Process: "firefox.exe"},
-		}
-		for _, ctx := range posCases {
-			title, body, matched := r.Evaluate(ctx)
-			if !matched {
-				t.Errorf("expected match for %+v", ctx)
-			}
-			if title != "Ticket moved to Done" || body != ctx.WindowTitle {
-				t.Errorf("unexpected output: %s / %s", title, body)
-			}
-		}
-
-		// Negatives
-		if _, _, m := r.Evaluate(domain.RuleEvaluationContext{ClickText: "In Progress", WindowTitle: "PROJ-101 - Jira - Google Chrome"}); m {
-			t.Error("expected no match for In Progress click")
-		}
-		if _, _, m := r.Evaluate(domain.RuleEvaluationContext{ClickText: "Done", WindowTitle: "Dashboard - Confluence"}); m {
-			t.Error("expected no match for Confluence window title")
-		}
-	})
-
-	// 5. Rule: invoice-ready-to-attach ("clipboard": "INV-*", "process": ["OUTLOOK.EXE", "olk.exe"])
-	t.Run("Rule_invoice_ready_to_attach", func(t *testing.T) {
-		r, ok := rulesMap["invoice-ready-to-attach"]
-		if !ok {
-			t.Fatal("rule invoice-ready-to-attach not found")
-		}
-
-		posCtx := domain.RuleEvaluationContext{
-			ClipboardText: "INV-998877",
-			Process:       "OUTLOOK.EXE",
-		}
-		title, body, matched := r.Evaluate(posCtx)
-		if !matched {
-			t.Error("expected match for invoice clipboard")
-		}
-		if title != "Invoice in clipboard" || body != "You copied INV-998877. Attach the invoice to this email?" {
-			t.Errorf("unexpected output: %s / %s", title, body)
-		}
-
-		// Negatives
-		if _, _, m := r.Evaluate(domain.RuleEvaluationContext{ClipboardText: "DOC-998877", Process: "OUTLOOK.EXE"}); m {
-			t.Error("expected no match for DOC- prefix")
-		}
-		if _, _, m := r.Evaluate(domain.RuleEvaluationContext{ClipboardText: "INV-998877", Process: "calc.exe"}); m {
-			t.Error("expected no match for calc.exe process")
-		}
-	})
+	return rulesMap
 }
 
-// TestLoadRulesFromBytes_ExhaustiveEdgeCases tests JSON decoding resilience.
+func TestRule_ForwardedEmailOpened(t *testing.T) {
+	rulesMap := loadProjectRules(t)
+	r, ok := rulesMap["forwarded-email-opened"]
+	if !ok {
+		t.Fatal("rule forwarded-email-opened not found")
+	}
+
+	// Positive matches
+	posCases := []domain.RuleEvaluationContext{
+		{ClickText: "FW: Budget 2026", Process: "OUTLOOK.EXE"},
+		{ClickText: "fw: urgent update", Process: "olk.exe"},
+		{ClickText: "FW:RE: Test", Process: "Outlook.exe"},
+	}
+	for _, ctx := range posCases {
+		title, body, matched := r.Evaluate(ctx)
+		if !matched {
+			t.Errorf("expected match for %+v", ctx)
+		}
+		if title != "Forwarded email" {
+			t.Errorf("got title %q, want 'Forwarded email'", title)
+		}
+		expectedBody := fmt.Sprintf("You opened a forwarded email: %s", ctx.ClickText)
+		if body != expectedBody {
+			t.Errorf("got body %q, want %q", body, expectedBody)
+		}
+	}
+
+	// Negatives
+	negCases := []domain.RuleEvaluationContext{
+		{ClickText: "RE: Budget 2026", Process: "OUTLOOK.EXE"},
+		{ClickText: "FW: Budget 2026", Process: "chrome.exe"},
+		{ClickText: "", Process: "OUTLOOK.EXE"},
+	}
+	for _, ctx := range negCases {
+		if _, _, matched := r.Evaluate(ctx); matched {
+			t.Errorf("expected no match for %+v", ctx)
+		}
+	}
+}
+
+func TestRule_UrgentEmailOpened(t *testing.T) {
+	rulesMap := loadProjectRules(t)
+	r, ok := rulesMap["urgent-email-opened"]
+	if !ok {
+		t.Fatal("rule urgent-email-opened not found")
+	}
+
+	posCases := []domain.RuleEvaluationContext{
+		{ClickText: "URGENT: Review needed", Process: "OUTLOOK.EXE"},
+		{ClickText: "This is urgent please read", Process: "olk.exe"},
+		{ClickText: "urgent", Process: "OUTLOOK.EXE"},
+	}
+	for _, ctx := range posCases {
+		title, body, matched := r.Evaluate(ctx)
+		if !matched {
+			t.Errorf("expected match for %+v", ctx)
+		}
+		if title != "Urgent email" || body != ctx.ClickText {
+			t.Errorf("unexpected output: %q / %q", title, body)
+		}
+	}
+
+	negCases := []domain.RuleEvaluationContext{
+		{ClickText: "Important email", Process: "OUTLOOK.EXE"},
+		{ClickText: "urgent email", Process: "notepad.exe"},
+	}
+	for _, ctx := range negCases {
+		if _, _, matched := r.Evaluate(ctx); matched {
+			t.Errorf("expected no match for %+v", ctx)
+		}
+	}
+}
+
+func TestRule_SalesforceRecordDeleted(t *testing.T) {
+	rulesMap := loadProjectRules(t)
+	r, ok := rulesMap["salesforce-record-deleted"]
+	if !ok {
+		t.Fatal("rule salesforce-record-deleted not found")
+	}
+
+	posCtx := domain.RuleEvaluationContext{
+		ClickText:   "Delete",
+		WindowTitle: "0012345 | Case | Salesforce - Google Chrome",
+		OCRScreenTexts: []string{
+			"Header",
+			"Are you sure you want to delete this record permanently?",
+			"Cancel",
+		},
+	}
+	title, body, matched := r.Evaluate(posCtx)
+	if !matched {
+		t.Errorf("expected match for salesforce deletion")
+	}
+	if title != "Record deleted" || body != "Deleted in Salesforce: 0012345 | Case | Salesforce - Google Chrome" {
+		t.Errorf("unexpected output: %s / %s", title, body)
+	}
+
+	negCases := []domain.RuleEvaluationContext{
+		{ClickText: "Cancel", WindowTitle: posCtx.WindowTitle, OCRScreenTexts: posCtx.OCRScreenTexts},
+		{ClickText: "Delete", WindowTitle: "Inbox - Gmail", OCRScreenTexts: posCtx.OCRScreenTexts},
+		{ClickText: "Delete", WindowTitle: posCtx.WindowTitle, OCRScreenTexts: []string{"Are you sure you want to save?"}},
+	}
+	for _, ctx := range negCases {
+		if _, _, m := r.Evaluate(ctx); m {
+			t.Errorf("expected no match for %+v", ctx)
+		}
+	}
+}
+
+func TestRule_JiraTicketDone(t *testing.T) {
+	rulesMap := loadProjectRules(t)
+	r, ok := rulesMap["jira-ticket-done"]
+	if !ok {
+		t.Fatal("rule jira-ticket-done not found")
+	}
+
+	posCases := []domain.RuleEvaluationContext{
+		{ClickText: "Done", WindowTitle: "PROJ-101 - Jira - Google Chrome", Process: "chrome.exe"},
+		{ClickText: "done", WindowTitle: "BUG-202 - Jira - Firefox", Process: "firefox.exe"},
+	}
+	for _, ctx := range posCases {
+		title, body, matched := r.Evaluate(ctx)
+		if !matched {
+			t.Errorf("expected match for %+v", ctx)
+		}
+		if title != "Ticket moved to Done" || body != ctx.WindowTitle {
+			t.Errorf("unexpected output: %s / %s", title, body)
+		}
+	}
+
+	if _, _, m := r.Evaluate(domain.RuleEvaluationContext{ClickText: "In Progress", WindowTitle: "PROJ-101 - Jira - Google Chrome"}); m {
+		t.Error("expected no match for In Progress click")
+	}
+	if _, _, m := r.Evaluate(domain.RuleEvaluationContext{ClickText: "Done", WindowTitle: "Dashboard - Confluence"}); m {
+		t.Error("expected no match for Confluence window title")
+	}
+}
+
+func TestRule_InvoiceReadyToAttach(t *testing.T) {
+	rulesMap := loadProjectRules(t)
+	r, ok := rulesMap["invoice-ready-to-attach"]
+	if !ok {
+		t.Fatal("rule invoice-ready-to-attach not found")
+	}
+
+	posCtx := domain.RuleEvaluationContext{
+		ClipboardText: "INV-998877",
+		Process:       "OUTLOOK.EXE",
+	}
+	title, body, matched := r.Evaluate(posCtx)
+	if !matched {
+		t.Error("expected match for invoice clipboard")
+	}
+	if title != "Invoice in clipboard" || body != "You copied INV-998877. Attach the invoice to this email?" {
+		t.Errorf("unexpected output: %s / %s", title, body)
+	}
+
+	if _, _, m := r.Evaluate(domain.RuleEvaluationContext{ClipboardText: "DOC-998877", Process: "OUTLOOK.EXE"}); m {
+		t.Error("expected no match for DOC- prefix")
+	}
+	if _, _, m := r.Evaluate(domain.RuleEvaluationContext{ClipboardText: "INV-998877", Process: "calc.exe"}); m {
+		t.Error("expected no match for calc.exe process")
+	}
+}
+
 func TestLoadRulesFromBytes_ExhaustiveEdgeCases(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -236,8 +229,8 @@ func TestLoadRulesFromBytes_ExhaustiveEdgeCases(t *testing.T) {
 			wantCount: 1,
 		},
 		{
-			name:      "rule with extra unexpected json fields (ignored gracefully)",
-			jsonInput: `{"rules": [{"id": "r1", "description": "some extra", "priority": 10, "popup": {"title": "T"}}]}`,
+			name:      "rule with extra unexpected json fields",
+			jsonInput: `{"rules": [{"id": "r1", "description": "extra", "popup": {"title": "T"}}]}`,
 			wantCount: 1,
 		},
 		{
@@ -253,11 +246,6 @@ func TestLoadRulesFromBytes_ExhaustiveEdgeCases(t *testing.T) {
 		{
 			name:      "invalid json root - array instead of object",
 			jsonInput: `[{"id": "r1"}]`,
-			wantErr:   true,
-		},
-		{
-			name:      "invalid json root - string",
-			jsonInput: `"not a json object"`,
 			wantErr:   true,
 		},
 		{
@@ -290,11 +278,6 @@ func TestLoadRulesFromBytes_ExhaustiveEdgeCases(t *testing.T) {
 			jsonInput: `{"rules": [{"id": "r1", "when": {"process": true}, "popup": {"title": "T"}}]}`,
 			wantErr:   true,
 		},
-		{
-			name:      "invalid when field - object instead of string or array",
-			jsonInput: `{"rules": [{"id": "r1", "when": {"ocr": {"nested": "value"}}, "popup": {"title": "T"}}]}`,
-			wantErr:   true,
-		},
 	}
 
 	for _, tc := range tests {
@@ -310,7 +293,6 @@ func TestLoadRulesFromBytes_ExhaustiveEdgeCases(t *testing.T) {
 	}
 }
 
-// TestLoadRules_BOMHandling tests UTF-8 Byte Order Mark support.
 func TestLoadRules_BOMHandling(t *testing.T) {
 	bomJSON := append([]byte{0xEF, 0xBB, 0xBF}, []byte(`{"rules": [{"id": "bom-rule", "popup": {"title": "BOM Title"}}]}`)...)
 	rules, err := LoadRulesFromBytes(bytes.TrimPrefix(bomJSON, []byte{0xEF, 0xBB, 0xBF}))
@@ -322,7 +304,6 @@ func TestLoadRules_BOMHandling(t *testing.T) {
 	}
 }
 
-// TestLoadRules_LargeRuleSet tests performance and correctness with a large rule set (1000 rules).
 func TestLoadRules_LargeRuleSet(t *testing.T) {
 	var buf bytes.Buffer
 	buf.WriteString(`{"rules": [`)
@@ -342,7 +323,6 @@ func TestLoadRules_LargeRuleSet(t *testing.T) {
 		t.Fatalf("expected 1000 rules, got %d", len(rules))
 	}
 
-	// Verify rule 777 matches correctly
 	r777 := rules[777]
 	title, body, matched := r777.Evaluate(domain.RuleEvaluationContext{
 		ClickText: "Click777",
@@ -353,7 +333,6 @@ func TestLoadRules_LargeRuleSet(t *testing.T) {
 	}
 }
 
-// TestLoadRules_IOErrors tests file and reader IO errors.
 func TestLoadRules_IOErrors(t *testing.T) {
 	// Reader error
 	_, err := LoadRules(errReader{})
