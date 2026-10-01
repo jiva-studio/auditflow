@@ -187,3 +187,93 @@ func TestAgent_E2E_AllEmployees(t *testing.T) {
 		})
 	}
 }
+
+func TestAgent_E2E_LeftHandedMouseClicks(t *testing.T) {
+	agentBin := testutil.GetAgentBin(t)
+	streamerBin := testutil.GetStreamerBin(t)
+	rulesPath := testutil.GetRulesPath(t)
+
+	archivePath := filepath.Join(t.TempDir(), "emp-lefthanded.tar.gz")
+	if err := testutil.GenerateLeftHandedMouseRecording(t, archivePath); err != nil {
+		t.Fatalf("failed to generate left-handed mouse recording: %v", err)
+	}
+
+	var mu sync.Mutex
+	var receivedPopups []*v1.Popup
+
+	mockServer := testutil.NewMockCentralServer(t, func(body []byte) {
+		var p v1.Popup
+		if err := proto.Unmarshal(body, &p); err == nil {
+			mu.Lock()
+			receivedPopups = append(receivedPopups, &p)
+			mu.Unlock()
+		}
+	})
+	defer mockServer.Close()
+
+	port := getFreePort(t)
+	agentURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	empID := "emp-lefthanded"
+	agentCmd := startAgent(t, agentBin, rulesPath, mockServer.URL, empID, port)
+	defer stopAgent(t, agentCmd)
+
+	waitForHealth(t, agentURL, 5*time.Second)
+
+	out, err := testutil.RunStreamer(t, streamerBin, archivePath, agentURL)
+	if err != nil {
+		t.Fatalf("streamer replay failed: %v, output:\n%s", err, string(out))
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	expectedPopups := []expectedPopup{
+		{
+			Employee: "emp-lefthanded",
+			Rule:     "forwarded-email-opened",
+			TS:       "2026-03-10T10:00:01Z",
+			Title:    "Forwarded email",
+			Body:     "You opened a forwarded email: FW: Left Handed Budget Update",
+		},
+		{
+			Employee: "emp-lefthanded",
+			Rule:     "jira-ticket-done",
+			TS:       "2026-03-10T10:00:02Z",
+			Title:    "Ticket moved to Done",
+			Body:     "DEV-42 - Jira - Google Chrome",
+		},
+		{
+			Employee: "emp-lefthanded",
+			Rule:     "urgent-email-opened",
+			TS:       "2026-03-10T10:00:03Z",
+			Title:    "Urgent email",
+			Body:     "Urgent Security Patch Review",
+		},
+	}
+
+	if len(receivedPopups) != len(expectedPopups) {
+		t.Fatalf("expected %d popups, got %d", len(expectedPopups), len(receivedPopups))
+	}
+
+	for i, exp := range expectedPopups {
+		act := receivedPopups[i]
+		if act.GetEmployee() != exp.Employee {
+			t.Errorf("popup #%d employee mismatch: got %s, want %s", i+1, act.GetEmployee(), exp.Employee)
+		}
+		if act.GetRule() != exp.Rule {
+			t.Errorf("popup #%d rule mismatch: got %s, want %s", i+1, act.GetRule(), exp.Rule)
+		}
+		if act.GetTitle() != exp.Title {
+			t.Errorf("popup #%d title mismatch: got %q, want %q", i+1, act.GetTitle(), exp.Title)
+		}
+		if act.GetBody() != exp.Body {
+			t.Errorf("popup #%d body mismatch: got %q, want %q", i+1, act.GetBody(), exp.Body)
+		}
+		if act.GetTs().AsTime().Format(time.RFC3339) != exp.TS {
+			t.Errorf("popup #%d ts mismatch: got %s, want %s", i+1, act.GetTs().AsTime().Format(time.RFC3339), exp.TS)
+		}
+	}
+}
