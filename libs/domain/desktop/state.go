@@ -132,9 +132,15 @@ func (f *SpatialFacet) autoRegisterDisplay(ev events.OCREvent, scale float64) {
 		return
 	}
 
+	var origX, origY int
+	if ev.DisplayID != 0 {
+		origX = ev.WindowRect.X
+		origY = ev.WindowRect.Y
+	}
+
 	displayBounds := geometry.Rectangle{
-		X:      ev.WindowRect.X,
-		Y:      ev.WindowRect.Y,
+		X:      origX,
+		Y:      origY,
 		Width:  ev.Resolution.Width,
 		Height: ev.Resolution.Height,
 	}
