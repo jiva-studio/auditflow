@@ -4,7 +4,7 @@
 Accepted
 
 ## Context
-ContextPath is an enterprise telemetry and compliance audit platform consisting of multiple distributed components:
+The system is an enterprise telemetry and compliance audit platform consisting of multiple distributed components:
 - **Streamer**: Ingests and replays high-frequency recorded workstation event logs.
 - **Agent**: Ingests desktop telemetry, maintains continuous workstation state across multi-display topologies, and evaluates compliance rules.
 - **Server**: Ingests, indexes, and serves audit popup records for querying and compliance reporting.

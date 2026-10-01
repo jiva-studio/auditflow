@@ -4,7 +4,7 @@
 Accepted
 
 ## Context
-The ContextPath distributed pipeline streams telemetry at high frequency (hundreds to thousands of events per second during fast replay) across services:
+The distributed pipeline streams telemetry at high frequency (hundreds to thousands of events per second during fast replay) across services:
 - Telemetry Ingestion: Streaming batches of input, screen, and system events to evaluation agents.
 - Compliance Auditing: Emitting audit popup notifications to central persistence upon rule satisfaction.
 
