@@ -113,7 +113,7 @@ func TestAgent_E2E_AllEmployees(t *testing.T) {
 	rulesPath := testutil.GetRulesPath(t)
 	dataDir := testutil.GetDataDir(t)
 
-	employees := []string{"emp-1", "emp-2", "emp-3", "emp-synthetic", "emp-edge", "emp-multidisplay", "emp-quadhd"}
+	employees := []string{"emp-1", "emp-2", "emp-3", "emp-synthetic", "emp-edge", "emp-multidisplay", "emp-quadhd", "emp-clickprocess"}
 
 	for _, empID := range employees {
 		empID := empID
@@ -185,5 +185,85 @@ func TestAgent_E2E_AllEmployees(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAgent_E2E_ClickProcessContext(t *testing.T) {
+	agentBin := testutil.GetAgentBin(t)
+	streamerBin := testutil.GetStreamerBin(t)
+	rulesPath := testutil.GetRulesPath(t)
+
+	empID := "emp-click-context"
+	tmpArchive := filepath.Join(t.TempDir(), "click_context.tar.gz")
+
+	_, err := testutil.GenerateClickProcessContextRecording(t, tmpArchive, empID)
+	if err != nil {
+		t.Fatalf("failed to generate click process context recording: %v", err)
+	}
+
+	var mu sync.Mutex
+	var receivedPopups []*v1.Popup
+
+	mockServer := testutil.NewMockCentralServer(t, func(body []byte) {
+		var p v1.Popup
+		if err := proto.Unmarshal(body, &p); err == nil {
+			mu.Lock()
+			receivedPopups = append(receivedPopups, &p)
+			mu.Unlock()
+		}
+	})
+	defer mockServer.Close()
+
+	port := getFreePort(t)
+	agentURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	agentCmd := startAgent(t, agentBin, rulesPath, mockServer.URL, empID, port)
+	defer stopAgent(t, agentCmd)
+
+	waitForHealth(t, agentURL, 5*time.Second)
+
+	out, err := testutil.RunStreamer(t, streamerBin, tmpArchive, agentURL)
+	if err != nil {
+		t.Fatalf("streamer replay failed: %v, output:\n%s", err, string(out))
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	expectedPopups := []expectedPopup{
+		{
+			Employee: empID,
+			Rule:     "forwarded-email-opened",
+			Title:    "Forwarded email",
+			Body:     "You opened a forwarded email: FW: Q3 Audit Report",
+		},
+		{
+			Employee: empID,
+			Rule:     "jira-ticket-done",
+			Title:    "Ticket moved to Done",
+			Body:     "PROJ-101 - Jira - Dashboard",
+		},
+	}
+
+	if len(receivedPopups) != len(expectedPopups) {
+		t.Fatalf("expected %d popups, got %d", len(expectedPopups), len(receivedPopups))
+	}
+
+	for i, exp := range expectedPopups {
+		act := receivedPopups[i]
+		if act.GetEmployee() != exp.Employee {
+			t.Errorf("popup #%d employee mismatch: got %s, want %s", i+1, act.GetEmployee(), exp.Employee)
+		}
+		if act.GetRule() != exp.Rule {
+			t.Errorf("popup #%d rule mismatch: got %s, want %s", i+1, act.GetRule(), exp.Rule)
+		}
+		if act.GetTitle() != exp.Title {
+			t.Errorf("popup #%d title mismatch: got %q, want %q", i+1, act.GetTitle(), exp.Title)
+		}
+		if act.GetBody() != exp.Body {
+			t.Errorf("popup #%d body mismatch: got %q, want %q", i+1, act.GetBody(), exp.Body)
+		}
 	}
 }

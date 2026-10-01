@@ -282,3 +282,353 @@ func TestService_CheckReadiness(t *testing.T) {
 		}
 	})
 }
+
+func setupOverrideTestRules() []rules.Rule {
+	clickPat, _ := rules.NewPatternList("FW:*")
+	procPat, _ := rules.NewPatternList("OUTLOOK.EXE")
+	tpl1, _ := rules.NewPopupTemplate("Forwarded email", "Opened: {click}")
+	r1, _ := rules.NewRule("forwarded-email", rules.WhenConditions{
+		Click:   &clickPat,
+		Process: &procPat,
+	}, tpl1)
+
+	savePat, _ := rules.NewPatternList("Save")
+	winPat, _ := rules.NewPatternList("*Customer Record*")
+	crmPat, _ := rules.NewPatternList("crm.exe")
+	tpl2, _ := rules.NewPopupTemplate("Saved record", "Saved in window: {window_title}")
+	r2, _ := rules.NewRule("save-crm", rules.WhenConditions{
+		Click:       &savePat,
+		Process:     &crmPat,
+		WindowTitle: &winPat,
+	}, tpl2)
+
+	return []rules.Rule{r1, r2}
+}
+
+func TestService_ProcessTick_ClickProcessNameOverride(t *testing.T) {
+	client := &mockAuditClient{}
+	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	batch, _ := events.NewTickBatch(0, now, now.Add(time.Second))
+
+	// Background window is Chrome
+	_ = batch.Add(events.WindowEvent{
+		Timestamp:   now,
+		ProcessName: "chrome.exe",
+		WindowTitle: "Google Chrome",
+	})
+
+	// OCR layer has "FW: Important Update"
+	_ = batch.Add(events.OCREvent{
+		Timestamp:  now.Add(5 * time.Millisecond),
+		DisplayID:  0,
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks: []display.OCRTextBlock{
+			{
+				Text: "FW: Important Update",
+				Box:  geometry.Rectangle{X: 100, Y: 100, Width: 200, Height: 30},
+			},
+		},
+	})
+
+	// Mouse click event carrying Outlook process context
+	_ = batch.Add(events.MouseEvent{
+		Timestamp:   now.Add(10 * time.Millisecond),
+		Action:      "click",
+		Button:      "left",
+		Position:    geometry.Point{X: 150, Y: 110},
+		ProcessName: "OUTLOOK.EXE",
+		WindowTitle: "Inbox - Outlook",
+	})
+
+	if err := svc.ProcessTick(context.Background(), batch); err != nil {
+		t.Fatalf("ProcessTick failed: %v", err)
+	}
+
+	popups := client.Popups()
+	if len(popups) != 1 {
+		t.Fatalf("expected 1 popup, got %d", len(popups))
+	}
+	if popups[0].Rule != "forwarded-email" || popups[0].Body != "Opened: FW: Important Update" {
+		t.Errorf("unexpected popup: %+v", popups[0])
+	}
+}
+
+func TestService_ProcessTick_ClickProcessNameMismatch(t *testing.T) {
+	client := &mockAuditClient{}
+	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	batch, _ := events.NewTickBatch(0, now, now.Add(time.Second))
+
+	// Background window is Outlook (would match if used)
+	_ = batch.Add(events.WindowEvent{
+		Timestamp:   now,
+		ProcessName: "OUTLOOK.EXE",
+		WindowTitle: "Inbox - Outlook",
+	})
+
+	_ = batch.Add(events.OCREvent{
+		Timestamp:  now.Add(5 * time.Millisecond),
+		DisplayID:  0,
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks: []display.OCRTextBlock{
+			{
+				Text: "FW: Important Update",
+				Box:  geometry.Rectangle{X: 100, Y: 100, Width: 200, Height: 30},
+			},
+		},
+	})
+
+	// Mouse event occurred in notepad.exe
+	_ = batch.Add(events.MouseEvent{
+		Timestamp:   now.Add(10 * time.Millisecond),
+		Action:      "click",
+		Button:      "left",
+		Position:    geometry.Point{X: 150, Y: 110},
+		ProcessName: "notepad.exe",
+		WindowTitle: "Untitled - Notepad",
+	})
+
+	if err := svc.ProcessTick(context.Background(), batch); err != nil {
+		t.Fatalf("ProcessTick failed: %v", err)
+	}
+
+	popups := client.Popups()
+	if len(popups) != 0 {
+		t.Fatalf("expected 0 popups due to process mismatch, got %d", len(popups))
+	}
+}
+
+func TestService_ProcessTick_ClickWindowTitleOverride(t *testing.T) {
+	client := &mockAuditClient{}
+	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	batch, _ := events.NewTickBatch(0, now, now.Add(time.Second))
+
+	// Background window title does not match "*Customer Record*"
+	_ = batch.Add(events.WindowEvent{
+		Timestamp:   now,
+		ProcessName: "crm.exe",
+		WindowTitle: "Settings Dashboard",
+	})
+
+	_ = batch.Add(events.OCREvent{
+		Timestamp:  now.Add(5 * time.Millisecond),
+		DisplayID:  0,
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks: []display.OCRTextBlock{
+			{
+				Text: "Save",
+				Box:  geometry.Rectangle{X: 300, Y: 300, Width: 80, Height: 30},
+			},
+		},
+	})
+
+	// Mouse event has WindowTitle matching "*Customer Record*"
+	_ = batch.Add(events.MouseEvent{
+		Timestamp:   now.Add(10 * time.Millisecond),
+		Action:      "click",
+		Button:      "left",
+		Position:    geometry.Point{X: 320, Y: 310},
+		ProcessName: "crm.exe",
+		WindowTitle: "Edit - Customer Record #42",
+	})
+
+	if err := svc.ProcessTick(context.Background(), batch); err != nil {
+		t.Fatalf("ProcessTick failed: %v", err)
+	}
+
+	popups := client.Popups()
+	if len(popups) != 1 {
+		t.Fatalf("expected 1 popup, got %d", len(popups))
+	}
+	if popups[0].Rule != "save-crm" || popups[0].Body != "Saved in window: Edit - Customer Record #42" {
+		t.Errorf("unexpected popup: %+v", popups[0])
+	}
+}
+
+func TestService_ProcessTick_ClickFallbackToBackgroundState(t *testing.T) {
+	client := &mockAuditClient{}
+	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	batch, _ := events.NewTickBatch(0, now, now.Add(time.Second))
+
+	_ = batch.Add(events.WindowEvent{
+		Timestamp:   now,
+		ProcessName: "OUTLOOK.EXE",
+		WindowTitle: "Inbox - Outlook",
+	})
+
+	_ = batch.Add(events.OCREvent{
+		Timestamp:  now.Add(5 * time.Millisecond),
+		DisplayID:  0,
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks: []display.OCRTextBlock{
+			{
+				Text: "FW: Project Notice",
+				Box:  geometry.Rectangle{X: 100, Y: 100, Width: 200, Height: 30},
+			},
+		},
+	})
+
+	// Mouse click without ProcessName or WindowTitle set
+	_ = batch.Add(events.MouseEvent{
+		Timestamp: now.Add(10 * time.Millisecond),
+		Action:    "click",
+		Button:    "left",
+		Position:  geometry.Point{X: 150, Y: 110},
+	})
+
+	if err := svc.ProcessTick(context.Background(), batch); err != nil {
+		t.Fatalf("ProcessTick failed: %v", err)
+	}
+
+	popups := client.Popups()
+	if len(popups) != 1 {
+		t.Fatalf("expected 1 popup from background process fallback, got %d", len(popups))
+	}
+	if popups[0].Rule != "forwarded-email" || popups[0].Body != "Opened: FW: Project Notice" {
+		t.Errorf("unexpected popup: %+v", popups[0])
+	}
+}
+
+func TestService_ProcessTick_ClickChromeLegacyWindowFallback(t *testing.T) {
+	client := &mockAuditClient{}
+	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	batch, _ := events.NewTickBatch(0, now, now.Add(time.Second))
+
+	_ = batch.Add(events.WindowEvent{
+		Timestamp:   now,
+		ProcessName: "OUTLOOK.EXE",
+		WindowTitle: "Inbox - Outlook",
+	})
+
+	_ = batch.Add(events.OCREvent{
+		Timestamp:  now.Add(5 * time.Millisecond),
+		DisplayID:  0,
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks: []display.OCRTextBlock{
+			{
+				Text: "FW: Important Notice",
+				Box:  geometry.Rectangle{X: 100, Y: 100, Width: 200, Height: 30},
+			},
+		},
+	})
+
+	_ = batch.Add(events.MouseEvent{
+		Timestamp:   now.Add(10 * time.Millisecond),
+		Action:      "click",
+		Button:      "left",
+		Position:    geometry.Point{X: 150, Y: 110},
+		ProcessName: "msedgewebview2.exe",
+		WindowTitle: "Chrome Legacy Window",
+	})
+
+	if err := svc.ProcessTick(context.Background(), batch); err != nil {
+		t.Fatalf("ProcessTick failed: %v", err)
+	}
+
+	popups := client.Popups()
+	if len(popups) != 1 {
+		t.Fatalf("expected 1 popup, got %d", len(popups))
+	}
+	if popups[0].Rule != "forwarded-email" || popups[0].Body != "Opened: FW: Important Notice" {
+		t.Errorf("unexpected popup: %+v", popups[0])
+	}
+}
+
+func createStressBatch(workerID, i int) events.TickBatch {
+	baseTime := time.Date(2026, 3, 10, 10, workerID, i, 0, time.UTC)
+	batch, _ := events.NewTickBatch(i, baseTime, baseTime.Add(time.Second))
+
+	_ = batch.Add(events.OCREvent{
+		Timestamp:  baseTime.Add(10 * time.Millisecond),
+		DisplayID:  0,
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks: []display.OCRTextBlock{
+			{
+				Text: "FW: Multi-threaded Notice",
+				Box:  geometry.Rectangle{X: 100, Y: 100, Width: 300, Height: 40},
+			},
+		},
+	})
+
+	_ = batch.Add(events.WindowEvent{
+		Timestamp:   baseTime.Add(20 * time.Millisecond),
+		ProcessName: "notepad.exe",
+		WindowTitle: "Notepad Document",
+	})
+
+	_ = batch.Add(events.MouseEvent{
+		Timestamp:   baseTime.Add(50 * time.Millisecond),
+		Action:      "click",
+		Button:      "left",
+		Position:    geometry.Point{X: 150, Y: 110},
+		ProcessName: "OUTLOOK.EXE",
+		WindowTitle: "Inbox - Outlook",
+	})
+
+	_ = batch.Add(events.MouseEvent{
+		Timestamp:   baseTime.Add(60 * time.Millisecond),
+		Action:      "click",
+		Button:      "left",
+		Position:    geometry.Point{X: 9999, Y: 9999},
+		ProcessName: "OUTLOOK.EXE",
+	})
+
+	return batch
+}
+
+func TestService_ProcessTick_StressRapidBurstChaosAndRace(t *testing.T) {
+	client := &mockAuditClient{}
+	svc, err := NewService("emp-stress", desktop.NewState(), setupOverrideTestRules(), client)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	numWorkers := 10
+	numTicksPerWorker := 30
+
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for i := 0; i < numTicksPerWorker; i++ {
+				batch := createStressBatch(workerID, i)
+				if err := svc.ProcessTick(context.Background(), batch); err != nil {
+					t.Errorf("worker %d tick %d failed: %v", workerID, i, err)
+				}
+			}
+		}(w)
+	}
+
+	wg.Wait()
+
+	popups := client.Popups()
+	expectedCount := numWorkers * numTicksPerWorker
+	if len(popups) != expectedCount {
+		t.Errorf("expected %d total popups from stress test, got %d", expectedCount, len(popups))
+	}
+}

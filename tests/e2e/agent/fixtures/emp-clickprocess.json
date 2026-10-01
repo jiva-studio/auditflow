@@ -1,0 +1,27 @@
+{
+  "employee_id": "emp-clickprocess",
+  "total_popups": 3,
+  "popups": [
+    {
+      "employee": "emp-clickprocess",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T10:00:01Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Priority Customer Escalation"
+    },
+    {
+      "employee": "emp-clickprocess",
+      "rule": "jira-ticket-done",
+      "ts": "2026-03-10T10:00:02Z",
+      "title": "Ticket moved to Done",
+      "body": "PROJ-555 - Jira - Sprint Board"
+    },
+    {
+      "employee": "emp-clickprocess",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T10:00:03Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-998877. Attach the invoice to this email?"
+    }
+  ]
+}
