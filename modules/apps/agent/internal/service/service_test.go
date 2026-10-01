@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"assessment/modules/apps/agent/internal/adapters/normalizer"
 	"assessment/modules/libs/domain/audit"
 	"assessment/modules/libs/domain/desktop"
 	"assessment/modules/libs/domain/display"
@@ -95,6 +96,17 @@ func TestNewService(t *testing.T) {
 		}
 		if svc == nil || svc.state == nil {
 			t.Fatal("expected non-nil service and state")
+		}
+	})
+
+	t.Run("valid with custom normalizer option", func(t *testing.T) {
+		norm := normalizer.NewWindowNormalizer()
+		svc, err := NewService("emp-1", nil, rls, client, WithNormalizer(norm), WithNormalizer(nil))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if svc == nil || svc.normalizer != norm {
+			t.Fatal("expected custom normalizer to be configured")
 		}
 	})
 }
@@ -696,7 +708,8 @@ func TestService_ProcessTick_ClickFallbackToBackgroundState(t *testing.T) {
 
 func TestService_ProcessTick_ClickChromeLegacyWindowFallback(t *testing.T) {
 	client := &mockAuditClient{}
-	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client)
+	norm := normalizer.NewWindowNormalizer()
+	svc, err := NewService("emp-1", desktop.NewState(), setupOverrideTestRules(), client, WithNormalizer(norm))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

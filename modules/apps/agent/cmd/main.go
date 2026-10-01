@@ -15,6 +15,7 @@ import (
 
 	"assessment/modules/apps/agent/internal/adapters/client"
 	"assessment/modules/apps/agent/internal/adapters/handler"
+	"assessment/modules/apps/agent/internal/adapters/normalizer"
 	"assessment/modules/apps/agent/internal/adapters/rules"
 	"assessment/modules/apps/agent/internal/service"
 	"assessment/modules/libs/telemetry"
@@ -99,7 +100,14 @@ func buildServer(cfg appConfig, logger *slog.Logger) (*http.Server, error) {
 		return nil, fmt.Errorf("initialize audit client: %w", err)
 	}
 
-	agentService, err := service.NewService(cfg.employeeID, nil, rulesProvider.GetRules(), auditClient)
+	windowNormalizer := normalizer.NewWindowNormalizer()
+	agentService, err := service.NewService(
+		cfg.employeeID,
+		nil,
+		rulesProvider.GetRules(),
+		auditClient,
+		service.WithNormalizer(windowNormalizer),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("initialize agent service: %w", err)
 	}

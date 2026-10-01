@@ -24,18 +24,43 @@ var (
 	ErrNoRulesLoaded     = errors.New("no rules loaded")
 )
 
+// Option configures optional parameters for Service.
+type Option func(*Service)
+
+// WithNormalizer sets a custom ContextNormalizer strategy for the service.
+func WithNormalizer(normalizer ports.ContextNormalizer) Option {
+	return func(s *Service) {
+		if normalizer != nil {
+			s.normalizer = normalizer
+		}
+	}
+}
+
+type passthroughNormalizer struct{}
+
+func (passthroughNormalizer) NormalizeClick(ctx rules.RuleEvaluationContext, m events.MouseEvent) rules.RuleEvaluationContext {
+	if m.ProcessName != "" {
+		ctx.Process = m.ProcessName
+	}
+	if m.WindowTitle != "" {
+		ctx.WindowTitle = m.WindowTitle
+	}
+	return ctx
+}
+
 // Service coordinates desktop state updates, spatial hit-testing, rule evaluation, and audit popup emission.
 type Service struct {
 	employeeID        string
 	state             *desktop.State
 	rules             []rules.Rule
 	auditClient       ports.AuditClient
+	normalizer        ports.ContextNormalizer
 	lastEmittedStates map[string]string
 	mu                sync.Mutex
 }
 
 // NewService constructs and validates a new agent Service instance.
-func NewService(employeeID string, state *desktop.State, rls []rules.Rule, auditClient ports.AuditClient) (*Service, error) {
+func NewService(employeeID string, state *desktop.State, rls []rules.Rule, auditClient ports.AuditClient, opts ...Option) (*Service, error) {
 	if strings.TrimSpace(employeeID) == "" {
 		return nil, ErrEmptyEmployeeID
 	}
@@ -49,13 +74,22 @@ func NewService(employeeID string, state *desktop.State, rls []rules.Rule, audit
 	copiedRules := make([]rules.Rule, len(rls))
 	copy(copiedRules, rls)
 
-	return &Service{
+	s := &Service{
 		employeeID:        employeeID,
 		state:             state,
 		rules:             copiedRules,
 		auditClient:       auditClient,
+		normalizer:        passthroughNormalizer{},
 		lastEmittedStates: make(map[string]string),
-	}, nil
+	}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
+		}
+	}
+
+	return s, nil
 }
 
 var _ ports.AgentService = (*Service)(nil)
@@ -129,8 +163,6 @@ func (s *Service) processEvent(ctx context.Context, ev events.Event) error {
 	}
 }
 
-const chromeLegacyWindow = "Chrome Legacy Window"
-
 func (s *Service) handleMouseEvent(ctx context.Context, m events.MouseEvent) error {
 	if !isClickEvent(m) {
 		return nil
@@ -138,15 +170,7 @@ func (s *Service) handleMouseEvent(ctx context.Context, m events.MouseEvent) err
 
 	clickText, _ := s.state.FindTextAt(m.Position)
 	evalCtx := s.state.BuildEvaluationContext(clickText)
-	// Chromium child HWNDs (e.g. WebView2 embedded inside Outlook) report an internal
-	// placeholder title ("Chrome Legacy Window") and helper process name ("msedgewebview2.exe")
-	// rather than the true top-level application window title and host process.
-	if m.ProcessName != "" && m.WindowTitle != chromeLegacyWindow {
-		evalCtx.Process = m.ProcessName
-	}
-	if m.WindowTitle != "" && m.WindowTitle != chromeLegacyWindow {
-		evalCtx.WindowTitle = m.WindowTitle
-	}
+	evalCtx = s.normalizer.NormalizeClick(evalCtx, m)
 	return s.evaluateRulesAndDispatch(ctx, evalCtx, m.Timestamp, true)
 }
 
