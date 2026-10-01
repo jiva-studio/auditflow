@@ -185,7 +185,7 @@ func runWorkerPool(ctx context.Context, archives []string, cfg runnerConfig, log
 	return nil
 }
 
-func processSingleArchive(ctx context.Context, archivePath string, cfg runnerConfig, logger *slog.Logger) error {
+func processSingleArchive(ctx context.Context, archivePath string, cfg runnerConfig, _ *slog.Logger) error {
 	empID, err := extractEmployeeID(archivePath)
 	if err != nil {
 		return fmt.Errorf("extract employee_id: %w", err)
@@ -249,13 +249,13 @@ func extractEmployeeID(archivePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("open archive: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gzr, err := gzip.NewReader(f)
 	if err != nil {
 		return "", fmt.Errorf("gzip reader: %w", err)
 	}
-	defer gzr.Close()
+	defer func() { _ = gzr.Close() }()
 
 	tr := tar.NewReader(gzr)
 	for {
@@ -288,7 +288,7 @@ func getFreePort() (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("listen free port: %w", err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
