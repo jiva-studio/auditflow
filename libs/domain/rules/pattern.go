@@ -18,7 +18,7 @@ func NewPattern(raw string) (Pattern, error) {
 
 // Matches checks if the provided text satisfies the pattern.
 func (p Pattern) Matches(text string) bool {
-	return matchWildcard(strings.ToLower(p.raw), strings.ToLower(text))
+	return matchWildcard([]rune(strings.ToLower(p.raw)), []rune(strings.ToLower(text)))
 }
 
 // Raw returns the original pattern string.
@@ -26,8 +26,8 @@ func (p Pattern) Raw() string {
 	return p.raw
 }
 
-// matchWildcard implements fast, non-allocating O(N+M) wildcard matching with '*'.
-func matchWildcard(pattern, text string) bool {
+// matchWildcard implements fast, non-allocating O(N+M) wildcard matching with '*' and '?' for Unicode runes.
+func matchWildcard(pattern, text []rune) bool {
 	pIdx, tIdx := 0, 0
 	starIdx, matchIdx := -1, 0
 

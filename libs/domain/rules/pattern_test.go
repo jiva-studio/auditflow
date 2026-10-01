@@ -119,6 +119,10 @@ func TestPattern_WildcardMatchingCombinations(t *testing.T) {
 		// Unicode & Cyrillic
 		{"cyrillic match", `Удалить*`, `УДАЛИТЬ запись`, true},
 		{"cyrillic mismatch", `Удалить*`, `Создать запись`, false},
+		{"cyrillic question mark match", `фа?л.txt`, `файл.txt`, true},
+		{"cyrillic question mark start", `?апись`, `Запись`, true},
+		{"cyrillic multi question marks", `Отчёт_??_??`, `отчёт_01_10`, true},
+		{"emoji with asterisk and question mark", `🚀*🎉?`, `🚀 blast off 🎉✨`, true},
 	}
 
 	for _, tc := range tests {
