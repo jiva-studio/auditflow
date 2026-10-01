@@ -314,6 +314,10 @@ func TestIsClickEvent(t *testing.T) {
 		{name: "drag action rejected", event: events.MouseEvent{Action: "drag", Button: "left"}, expected: false},
 		{name: "mousedrag action rejected", event: events.MouseEvent{Action: "mousedrag", Button: "primary"}, expected: false},
 		{name: "scroll action rejected", event: events.MouseEvent{Action: "scroll", Button: "primary"}, expected: false},
+		{name: "mousescroll action rejected", event: events.MouseEvent{Action: "mousescroll", Button: "left"}, expected: false},
+		{name: "up action rejected", event: events.MouseEvent{Action: "up", Button: "left"}, expected: false},
+		{name: "mouseup action rejected", event: events.MouseEvent{Action: "mouseup", Button: "primary"}, expected: false},
+		{name: "release action rejected", event: events.MouseEvent{Action: "release", Button: "main"}, expected: false},
 		{name: "move action with click count rejected", event: events.MouseEvent{Action: "move", ClickCount: "single"}, expected: false},
 		{name: "drag action with primary button rejected", event: events.MouseEvent{Action: "drag", Button: "primary", ClickCount: "1"}, expected: false},
 

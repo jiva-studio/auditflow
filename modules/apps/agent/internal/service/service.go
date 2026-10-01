@@ -138,8 +138,9 @@ func (s *Service) handleMouseEvent(ctx context.Context, m events.MouseEvent) err
 
 	clickText, _ := s.state.FindTextAt(m.Position)
 	evalCtx := s.state.BuildEvaluationContext(clickText)
-	// Chromium child HWNDs report an internal placeholder title ("Chrome Legacy Window")
-	// rather than the true top-level application window title.
+	// Chromium child HWNDs (e.g. WebView2 embedded inside Outlook) report an internal
+	// placeholder title ("Chrome Legacy Window") and helper process name ("msedgewebview2.exe")
+	// rather than the true top-level application window title and host process.
 	if m.ProcessName != "" && m.WindowTitle != chromeLegacyWindow {
 		evalCtx.Process = m.ProcessName
 	}
@@ -187,7 +188,7 @@ func (s *Service) evaluateRulesAndDispatch(ctx context.Context, evalCtx rules.Ru
 
 func isGestureAction(act string) bool {
 	switch act {
-	case "move", "mousemove", "drag", "mousedrag", "scroll":
+	case "move", "mousemove", "drag", "mousedrag", "scroll", "mousescroll", "up", "mouseup", "release":
 		return true
 	default:
 		return false
