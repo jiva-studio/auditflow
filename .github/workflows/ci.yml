@@ -191,12 +191,15 @@ jobs:
           retention-days: 14
 
   # ----------------------------------------------------------------------------
-  # 6. PARALLEL CONTAINER BUILDS MATRIX
+  # 6. PARALLEL CONTAINER PUBLISH TO GITHUB PACKAGES (GHCR.IO)
   # ----------------------------------------------------------------------------
   build-docker:
-    name: Docker Image (${{ matrix.service }})
+    name: Package (${{ matrix.service }})
     runs-on: ubuntu-latest
     needs: [architecture-guards, lint, unit-test, e2e-test]
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         service: [server, agent, streamer]
@@ -207,10 +210,32 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker Image
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata & version tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/auditflow-${{ matrix.service }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,prefix=sha-
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and Push Docker Image to GitHub Packages
         uses: docker/build-push-action@v5
         with:
           context: .
           file: modules/apps/${{ matrix.service }}/Dockerfile
-          push: false
-          tags: auditflow-${{ matrix.service }}:latest
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
