@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"assessment/modules/apps/streamer/internal/adapters/timer"
+	"assessment/modules/apps/streamer/internal/service"
 	"assessment/modules/libs/domain/display"
 	"assessment/modules/libs/domain/events"
 	"assessment/modules/libs/domain/geometry"
 	"assessment/modules/libs/domain/session"
-	"assessment/modules/apps/streamer/internal/adapters/timer"
-	"assessment/modules/apps/streamer/internal/service"
 )
 
 type mockSource struct {

@@ -13,9 +13,10 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"assessment/modules/libs/domain/events"
 	"assessment/modules/apps/streamer/internal/adapters/mapper"
 	"assessment/modules/apps/streamer/internal/ports"
+	"assessment/modules/libs/domain/events"
+	"assessment/modules/libs/telemetry"
 )
 
 // Sentinel errors for HTTPClient.
@@ -44,7 +45,7 @@ func NewHTTPClient(agentURL string, timeout time.Duration) (*HTTPClient, error) 
 	return &HTTPClient{
 		agentURL: baseURL,
 		httpClient: &http.Client{
-			Transport: transport,
+			Transport: telemetry.NewTraceRoundTripper(transport),
 			Timeout:   timeout,
 		},
 	}, nil

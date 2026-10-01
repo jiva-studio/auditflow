@@ -13,9 +13,10 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"assessment/modules/libs/domain/audit"
 	"assessment/modules/apps/agent/internal/adapters/mapper"
 	"assessment/modules/apps/agent/internal/ports"
+	"assessment/modules/libs/domain/audit"
+	"assessment/modules/libs/telemetry"
 )
 
 // Sentinel errors for AuditHTTPClient.
@@ -44,7 +45,7 @@ func NewAuditHTTPClient(serverURL string, timeout time.Duration) (*AuditHTTPClie
 	return &AuditHTTPClient{
 		serverURL: baseURL,
 		httpClient: &http.Client{
-			Transport: transport,
+			Transport: telemetry.NewTraceRoundTripper(transport),
 			Timeout:   timeout,
 		},
 	}, nil

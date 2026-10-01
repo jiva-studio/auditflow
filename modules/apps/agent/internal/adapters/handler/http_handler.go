@@ -5,13 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"google.golang.org/protobuf/proto"
 
-	v1 "assessment/modules/libs/protocol/gen/go/v1"
 	"assessment/modules/apps/agent/internal/adapters/mapper"
 	"assessment/modules/apps/agent/internal/ports"
+	v1 "assessment/modules/libs/protocol/gen/go/v1"
+	"assessment/modules/libs/telemetry"
 )
 
 const maxTickPayloadSize = 16 * 1024 * 1024 // 16 MB
@@ -24,24 +26,34 @@ var (
 // HTTPHandler serves inbound HTTP requests for the agent service.
 type HTTPHandler struct {
 	service ports.AgentService
+	logger  *slog.Logger
 }
 
 // NewHTTPHandler creates a new HTTPHandler wrapping the given AgentService.
-func NewHTTPHandler(service ports.AgentService) (*HTTPHandler, error) {
+func NewHTTPHandler(service ports.AgentService, loggers ...*slog.Logger) (*HTTPHandler, error) {
 	if service == nil {
 		return nil, ErrNilAgentService
 	}
-	return &HTTPHandler{service: service}, nil
+	var logger *slog.Logger
+	if len(loggers) > 0 && loggers[0] != nil {
+		logger = loggers[0]
+	} else {
+		logger = slog.Default()
+	}
+	return &HTTPHandler{
+		service: service,
+		logger:  logger,
+	}, nil
 }
 
-// Routes registers the HTTP endpoints and returns the root handler.
+// Routes registers the HTTP endpoints and returns the root handler wrapped with TraceMiddleware.
 func (h *HTTPHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/tick", h.handleTick)
 	mux.HandleFunc("/health", h.handleHealth)
 	mux.HandleFunc("/health/live", h.handleLive)
 	mux.HandleFunc("/health/ready", h.handleReady)
-	return mux
+	return telemetry.TraceMiddleware("agent", h.logger)(mux)
 }
 
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"assessment/modules/apps/agent/internal/ports"
 	domainRules "assessment/modules/libs/domain/rules"
 	"assessment/modules/libs/rules"
-	"assessment/modules/apps/agent/internal/ports"
 )
 
 // Sentinel errors for FileRulesProvider.

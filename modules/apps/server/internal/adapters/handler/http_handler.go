@@ -8,12 +8,15 @@ import (
 	"net/http"
 	"strings"
 
+	"log/slog"
+
 	"google.golang.org/protobuf/proto"
 
-	"assessment/modules/libs/domain/audit"
-	v1 "assessment/modules/libs/protocol/gen/go/v1"
 	"assessment/modules/apps/server/internal/adapters/mapper"
 	"assessment/modules/apps/server/internal/ports"
+	"assessment/modules/libs/domain/audit"
+	v1 "assessment/modules/libs/protocol/gen/go/v1"
+	"assessment/modules/libs/telemetry"
 )
 
 const maxPopupPayloadSize = 4 * 1024 * 1024 // 4 MB
@@ -26,33 +29,43 @@ var (
 // HTTPHandler exposes REST and Protobuf endpoints for the audit server.
 type HTTPHandler struct {
 	service ports.ServerService
-	mux     *http.ServeMux
+	handler http.Handler
+	logger  *slog.Logger
 }
 
 // NewHTTPHandler constructs and configures a new HTTPHandler.
-func NewHTTPHandler(svc ports.ServerService) (*HTTPHandler, error) {
+func NewHTTPHandler(svc ports.ServerService, loggers ...*slog.Logger) (*HTTPHandler, error) {
 	if svc == nil {
 		return nil, ErrNilServerService
 	}
 
+	var logger *slog.Logger
+	if len(loggers) > 0 && loggers[0] != nil {
+		logger = loggers[0]
+	} else {
+		logger = slog.Default()
+	}
+
+	mux := http.NewServeMux()
 	h := &HTTPHandler{
 		service: svc,
-		mux:     http.NewServeMux(),
+		handler: telemetry.TraceMiddleware("server", logger)(mux),
+		logger:  logger,
 	}
-	h.registerRoutes()
+	h.registerRoutes(mux)
 	return h, nil
 }
 
 // ServeHTTP implements http.Handler.
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.mux.ServeHTTP(w, r)
+	h.handler.ServeHTTP(w, r)
 }
 
-func (h *HTTPHandler) registerRoutes() {
-	h.mux.HandleFunc("/audit", h.handleAudit)
-	h.mux.HandleFunc("/health", h.handleHealth)
-	h.mux.HandleFunc("/health/live", h.handleLive)
-	h.mux.HandleFunc("/health/ready", h.handleReady)
+func (h *HTTPHandler) registerRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/audit", h.handleAudit)
+	mux.HandleFunc("/health", h.handleHealth)
+	mux.HandleFunc("/health/live", h.handleLive)
+	mux.HandleFunc("/health/ready", h.handleReady)
 }
 
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {

@@ -10,10 +10,10 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"assessment/modules/apps/streamer/internal/adapters/client"
 	"assessment/modules/libs/domain/events"
 	"assessment/modules/libs/domain/geometry"
 	v1 "assessment/modules/libs/protocol/gen/go/v1"
-	"assessment/modules/apps/streamer/internal/adapters/client"
 )
 
 func TestHTTPClient_SendTick_Success(t *testing.T) {

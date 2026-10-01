@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"assessment/modules/apps/streamer/internal/adapters/mapper"
 	"assessment/modules/libs/domain/events"
 	"assessment/modules/libs/domain/geometry"
-	"assessment/modules/apps/streamer/internal/adapters/mapper"
 )
 
 func TestToProtoTickBatch(t *testing.T) {

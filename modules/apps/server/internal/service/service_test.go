@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"assessment/modules/libs/domain/audit"
 	"assessment/modules/apps/server/internal/service"
+	"assessment/modules/libs/domain/audit"
 )
 
 type mockRepo struct {

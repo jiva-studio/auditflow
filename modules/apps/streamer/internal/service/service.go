@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
+	"assessment/modules/apps/streamer/internal/ports"
 	"assessment/modules/libs/domain/events"
 	"assessment/modules/libs/domain/session"
-	"assessment/modules/apps/streamer/internal/ports"
 )
 
 // Sentinel errors for ReplayService configuration.

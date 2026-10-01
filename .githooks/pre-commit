@@ -34,14 +34,16 @@ fi
 
 # 3. Targeted module checks
 TARGET_MAP=(
-  "libs/domain/:make domain_guard domain_test domain_lint"
+  "modules/libs/domain/:make domain_guard domain_test domain_lint"
   "scripts/guards/domain/:make domain_guard domain_test domain_lint"
-  "libs/protocol/:make protocol_test protocol_lint"
-  "modules/agent/:make agent_test agent_lint"
+  "modules/libs/protocol/:make protocol_test protocol_lint"
+  "modules/libs/rules/:make rules_test rules_lint"
+  "modules/libs/telemetry/:make telemetry_test telemetry_lint"
+  "modules/apps/agent/:make agent_test agent_lint"
   "scripts/guards/agent/:make agent_test agent_lint"
-  "modules/server/:make server_test server_lint"
+  "modules/apps/server/:make server_test server_lint"
   "scripts/guards/server/:make server_test server_lint"
-  "modules/streamer/:make streamer_test streamer_lint"
+  "modules/apps/streamer/:make streamer_test streamer_lint"
   "scripts/guards/streamer/:make streamer_test streamer_lint"
   "tests/e2e/:make e2e_test"
 )

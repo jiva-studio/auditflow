@@ -8,6 +8,7 @@ MUTATE_CMD ?= go run github.com/go-gremlins/gremlins/cmd/gremlins@latest unleash
         domain_guard domain_test domain_lint domain_mutate \
         protocol_gen protocol_test protocol_lint \
         rules_test rules_lint rules_mutate \
+        telemetry_test telemetry_lint \
         agent_test agent_lint agent_mutate \
         server_test server_lint server_mutate \
         streamer_test streamer_lint streamer_mutate \
@@ -58,6 +59,16 @@ rules_lint:
 
 rules_mutate:
 	cd modules/libs/rules && $(MUTATE_CMD)
+
+# ==============================================================================
+# LIBS / TELEMETRY
+# ==============================================================================
+
+telemetry_test:
+	cd modules/libs/telemetry && go test -count=1 ./...
+
+telemetry_lint:
+	cd modules/libs/telemetry && golangci-lint run ./...
 
 
 # ==============================================================================

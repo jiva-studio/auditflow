@@ -7,9 +7,9 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"assessment/modules/apps/server/internal/adapters/mapper"
 	"assessment/modules/libs/domain/audit"
 	v1 "assessment/modules/libs/protocol/gen/go/v1"
-	"assessment/modules/apps/server/internal/adapters/mapper"
 )
 
 func TestToDomainPopup_Success(t *testing.T) {

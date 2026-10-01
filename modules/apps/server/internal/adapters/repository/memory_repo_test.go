@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"assessment/modules/libs/domain/audit"
 	"assessment/modules/apps/server/internal/adapters/repository"
+	"assessment/modules/libs/domain/audit"
 )
 
 func populateRepo(t *testing.T) (*repository.MemoryRepository, context.Context) {

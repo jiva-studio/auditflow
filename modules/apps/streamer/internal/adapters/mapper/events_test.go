@@ -4,10 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"assessment/modules/apps/streamer/internal/adapters/mapper"
 	"assessment/modules/libs/domain/display"
 	"assessment/modules/libs/domain/events"
 	"assessment/modules/libs/domain/geometry"
-	"assessment/modules/apps/streamer/internal/adapters/mapper"
 )
 
 type customUnsupportedEvent struct {

@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"assessment/modules/apps/agent/internal/ports"
 	"assessment/modules/libs/domain/audit"
 	"assessment/modules/libs/domain/desktop"
 	"assessment/modules/libs/domain/events"
 	"assessment/modules/libs/domain/rules"
-	"assessment/modules/apps/agent/internal/ports"
 )
 
 // Sentinel errors for Service.

@@ -5,8 +5,8 @@ import (
 	"context"
 	"sync"
 
-	"assessment/modules/libs/domain/audit"
 	"assessment/modules/apps/server/internal/ports"
+	"assessment/modules/libs/domain/audit"
 )
 
 // MemoryRepository implements ports.AuditRepository in-memory with thread-safety.

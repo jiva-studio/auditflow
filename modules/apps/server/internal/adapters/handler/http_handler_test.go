@@ -13,10 +13,10 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"assessment/modules/libs/domain/audit"
-	v1 "assessment/modules/libs/protocol/gen/go/v1"
 	"assessment/modules/apps/server/internal/adapters/handler"
 	"assessment/modules/apps/server/internal/adapters/mapper"
+	"assessment/modules/libs/domain/audit"
+	v1 "assessment/modules/libs/protocol/gen/go/v1"
 )
 
 type mockServerService struct {

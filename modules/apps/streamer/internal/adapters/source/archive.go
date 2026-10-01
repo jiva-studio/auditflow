@@ -18,12 +18,12 @@ import (
 	"sync"
 	"time"
 
+	"assessment/modules/apps/streamer/internal/adapters/reporter"
+	"assessment/modules/apps/streamer/internal/ports"
 	"assessment/modules/libs/domain/display"
 	"assessment/modules/libs/domain/events"
 	"assessment/modules/libs/domain/geometry"
 	"assessment/modules/libs/domain/session"
-	"assessment/modules/apps/streamer/internal/adapters/reporter"
-	"assessment/modules/apps/streamer/internal/ports"
 )
 
 // Sentinel errors for TarGzEventSource.

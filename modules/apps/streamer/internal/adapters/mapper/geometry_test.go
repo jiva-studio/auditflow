@@ -3,8 +3,8 @@ package mapper_test
 import (
 	"testing"
 
-	"assessment/modules/libs/domain/geometry"
 	"assessment/modules/apps/streamer/internal/adapters/mapper"
+	"assessment/modules/libs/domain/geometry"
 )
 
 func TestToProtoPoint(t *testing.T) {

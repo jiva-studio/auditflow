@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,9 +17,13 @@ import (
 	"assessment/modules/apps/agent/internal/adapters/handler"
 	"assessment/modules/apps/agent/internal/adapters/rules"
 	"assessment/modules/apps/agent/internal/service"
+	"assessment/modules/libs/telemetry"
 )
 
-var exitHandler = log.Fatalf
+var exitHandler = func(format string, args ...any) {
+	slog.Default().Error(fmt.Sprintf(format, args...))
+	os.Exit(1)
+}
 
 type appConfig struct {
 	port          string
@@ -30,23 +34,37 @@ type appConfig struct {
 }
 
 func main() {
-	if err := run(); err != nil {
+	logger := telemetry.NewLogger(telemetry.LoggerConfig{
+		ServiceName: "agent",
+		Level:       slog.LevelInfo,
+		Format:      telemetry.FormatJSON,
+	})
+	slog.SetDefault(logger)
+
+	if err := run(logger); err != nil {
 		exitHandler("[agent] fatal error: %v", err)
 	}
 }
 
-func run() error {
+func run(loggers ...*slog.Logger) error {
+	var logger *slog.Logger
+	if len(loggers) > 0 && loggers[0] != nil {
+		logger = loggers[0]
+	} else {
+		logger = slog.Default()
+	}
+
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
 
-	server, err := buildServer(cfg)
+	server, err := buildServer(cfg, logger)
 	if err != nil {
 		return err
 	}
 
-	return runServer(server, cfg)
+	return runServer(server, cfg, logger)
 }
 
 func loadConfig() (appConfig, error) {
@@ -70,7 +88,7 @@ func loadConfig() (appConfig, error) {
 	}, nil
 }
 
-func buildServer(cfg appConfig) (*http.Server, error) {
+func buildServer(cfg appConfig, logger *slog.Logger) (*http.Server, error) {
 	rulesProvider, err := rules.NewFileRulesProvider(cfg.rulesPath)
 	if err != nil {
 		return nil, fmt.Errorf("initialize rules provider: %w", err)
@@ -86,7 +104,7 @@ func buildServer(cfg appConfig) (*http.Server, error) {
 		return nil, fmt.Errorf("initialize agent service: %w", err)
 	}
 
-	httpHandler, err := handler.NewHTTPHandler(agentService)
+	httpHandler, err := handler.NewHTTPHandler(agentService, logger)
 	if err != nil {
 		return nil, fmt.Errorf("initialize HTTP handler: %w", err)
 	}
@@ -98,13 +116,16 @@ func buildServer(cfg appConfig) (*http.Server, error) {
 	}, nil
 }
 
-func runServer(server *http.Server, cfg appConfig) error {
+func runServer(server *http.Server, cfg appConfig, logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	serverErr := make(chan error, 1)
 	go func() {
-		log.Printf("[agent] listening on :%s for employee %s", cfg.port, cfg.employeeID)
+		logger.Info("agent HTTP server started",
+			slog.String("port", cfg.port),
+			slog.String("employee_id", cfg.employeeID),
+		)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
@@ -114,13 +135,13 @@ func runServer(server *http.Server, cfg appConfig) error {
 	case err := <-serverErr:
 		return fmt.Errorf("server error: %w", err)
 	case <-ctx.Done():
-		log.Printf("[agent] shutting down server gracefully...")
+		logger.Info("shutting down agent server gracefully...")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("graceful shutdown failed: %w", err)
 		}
-		log.Printf("[agent] server stopped")
+		logger.Info("agent server stopped")
 		return nil
 	}
 }

@@ -10,6 +10,7 @@ WORKDIR /workspace
 
 COPY modules/libs/domain/ modules/libs/domain/
 COPY modules/libs/protocol/ modules/libs/protocol/
+COPY modules/libs/telemetry/ modules/libs/telemetry/
 COPY modules/apps/server/ modules/apps/server/
 
 WORKDIR /workspace/modules/apps/server
