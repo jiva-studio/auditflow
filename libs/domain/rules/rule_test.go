@@ -139,3 +139,40 @@ func TestRule_ClipboardAndValidation(t *testing.T) {
 		t.Fatal("click rule should not match empty click context")
 	}
 }
+
+func TestRule_DefaultsAndMismatch(t *testing.T) {
+	popupTmpl, _ := NewPopupTemplate("Details", "Title: {window_title}, Click: {click}, Clip: {clipboard}, Proc: {process}")
+
+	// Rule with no when conditions
+	rule, err := NewRule("catch-all", WhenConditions{}, popupTmpl)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := RuleEvaluationContext{
+		ClickText:     "Submit",
+		Process:       "chrome.exe",
+		WindowTitle:   "Dashboard",
+		ClipboardText: "ABC-123",
+	}
+
+	title, body, matched := rule.Evaluate(ctx)
+	if !matched {
+		t.Fatal("expected match")
+	}
+	if title != "Details" || body != "Title: Dashboard, Click: Submit, Clip: ABC-123, Proc: chrome.exe" {
+		t.Fatalf("unexpected body: %s", body)
+	}
+
+	// Window title mismatch test
+	winPattern, _ := NewPatternList("Specific Title")
+	ruleWin, _ := NewRule("win-rule", WhenConditions{WindowTitle: &winPattern}, popupTmpl)
+	_, _, matched = ruleWin.Evaluate(RuleEvaluationContext{WindowTitle: "Other Title"})
+	if matched {
+		t.Fatal("expected no match for window title mismatch")
+	}
+	_, _, matched = ruleWin.Evaluate(RuleEvaluationContext{WindowTitle: ""})
+	if matched {
+		t.Fatal("expected no match for empty window title")
+	}
+}
