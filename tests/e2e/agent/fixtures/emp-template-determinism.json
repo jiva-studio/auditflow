@@ -1,0 +1,27 @@
+{
+  "employee_id": "emp-template-determinism",
+  "total_popups": 3,
+  "popups": [
+    {
+      "employee": "emp-template-determinism",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T15:00:01Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: {clipboard} report"
+    },
+    {
+      "employee": "emp-template-determinism",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T15:00:02Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-{click}-{window_title}. Attach the invoice to this email?"
+    },
+    {
+      "employee": "emp-template-determinism",
+      "rule": "salesforce-record-deleted",
+      "ts": "2026-03-10T15:00:03Z",
+      "title": "Record deleted",
+      "body": "Deleted in Salesforce: Account | Salesforce"
+    }
+  ]
+}

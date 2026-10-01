@@ -25,8 +25,9 @@ func NewPopupTemplate(title, body string) (PopupTemplate, error) {
 	}, nil
 }
 
-// Render replaces placeholder variables like {click}, {window_title}, {clipboard}, {ocr} in title and body.
-// Any remaining unresolved placeholders of the form {placeholder_name} are cleanly stripped.
+// Render replaces placeholder variables like {click}, {window_title}, {clipboard}, {ocr} in title and body
+// using single-pass substitution to ensure deterministic output, prevent secondary expansion,
+// and strip any unresolved placeholders.
 func (t PopupTemplate) Render(vars map[string]string) (renderedTitle string, renderedBody string) {
 	return renderString(t.Title, vars), renderString(t.Body, vars)
 }

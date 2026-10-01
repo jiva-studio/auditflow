@@ -113,7 +113,7 @@ func TestAgent_E2E_AllEmployees(t *testing.T) {
 	rulesPath := testutil.GetRulesPath(t)
 	dataDir := testutil.GetDataDir(t)
 
-	employees := []string{"emp-1", "emp-2", "emp-3", "emp-synthetic", "emp-edge", "emp-multidisplay", "emp-quadhd", "emp-lefthand", "emp-placeholders", "emp-clickprocess", "emp-contextreset", "emp-boundary-sync"}
+	employees := []string{"emp-1", "emp-2", "emp-3", "emp-synthetic", "emp-edge", "emp-multidisplay", "emp-quadhd", "emp-lefthand", "emp-placeholders", "emp-clickprocess", "emp-contextreset", "emp-boundary-sync", "emp-template-determinism"}
 
 	for _, empID := range employees {
 		empID := empID
