@@ -84,4 +84,42 @@ func TestDisplayHitTest(t *testing.T) {
 	if ok {
 		t.Fatal("expected hit test to miss")
 	}
+
+	// HitTest outside display
+	outsideDisplay := geometry.Point{X: 0, Y: 0}
+	_, ok = d.HitTest(outsideDisplay, frame)
+	if ok {
+		t.Fatal("expected hit test outside display to fail")
+	}
+
+	// MapToLocal outside display
+	_, ok = d.MapToLocal(outsideDisplay)
+	if ok {
+		t.Fatal("expected MapToLocal outside display to fail")
+	}
+}
+
+func TestOCRTextBlock_And_FrameValidation(t *testing.T) {
+	d, _ := NewDisplay(1, geometry.Rectangle{X: 0, Y: 0, Width: 1920, Height: 1080}, 1.0, true)
+
+	// OCRTextBlock Contains
+	tb := OCRTextBlock{
+		Text: "test",
+		Box:  geometry.Rectangle{X: 10, Y: 10, Width: 50, Height: 20},
+	}
+	if !tb.Contains(geometry.Point{X: 20, Y: 15}) {
+		t.Fatal("expected text block to contain point")
+	}
+	if tb.Contains(geometry.Point{X: 100, Y: 100}) {
+		t.Fatal("expected text block not to contain point")
+	}
+
+	// Invalid frame resolution
+	invalidFrame := OCRFrame{
+		Resolution: geometry.Size{Width: 0, Height: 0},
+	}
+	_, ok := invalidFrame.FindBlockAt(geometry.Point{X: 10, Y: 10}, d.Bounds)
+	if ok {
+		t.Fatal("expected FindBlockAt to fail with zero resolution")
+	}
 }

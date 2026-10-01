@@ -60,3 +60,20 @@ func TestRectangleIntersects(t *testing.T) {
 		t.Fatal("rectangles should not intersect")
 	}
 }
+
+func TestSize(t *testing.T) {
+	valid := Size{Width: 1920, Height: 1080}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("expected valid size, got: %v", err)
+	}
+
+	invalidWidth := Size{Width: -1, Height: 1080}
+	if err := invalidWidth.Validate(); err != ErrInvalidDimensions {
+		t.Fatalf("expected ErrInvalidDimensions, got: %v", err)
+	}
+
+	invalidHeight := Size{Width: 1920, Height: -10}
+	if err := invalidHeight.Validate(); err != ErrInvalidDimensions {
+		t.Fatalf("expected ErrInvalidDimensions, got: %v", err)
+	}
+}

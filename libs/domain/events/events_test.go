@@ -43,7 +43,7 @@ func TestEvents_ImplementsInterface(t *testing.T) {
 		Timestamp: now,
 		DisplayID: 1,
 	}
-	if oEvent.GetType() != events.EventTypeOCR {
+	if oEvent.GetType() != events.EventTypeOCR || !oEvent.GetTimestamp().Equal(now) {
 		t.Fatal("invalid OCR event")
 	}
 
@@ -51,7 +51,7 @@ func TestEvents_ImplementsInterface(t *testing.T) {
 		Timestamp: now,
 		Type:      events.EventTypeKeystroke,
 	}
-	if gEvent.GetType() != events.EventTypeKeystroke {
+	if gEvent.GetType() != events.EventTypeKeystroke || !gEvent.GetTimestamp().Equal(now) {
 		t.Fatal("invalid generic activity event")
 	}
 }

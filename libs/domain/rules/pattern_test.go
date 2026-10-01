@@ -32,7 +32,7 @@ func TestPattern(t *testing.T) {
 	}
 }
 
-func TestPatternList(t *testing.T) {
+func TestPatternList_Matches(t *testing.T) {
 	pl, err := NewPatternList("OUTLOOK.EXE", "olk.exe")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -49,5 +49,34 @@ func TestPatternList(t *testing.T) {
 	}
 	if pl.Matches("chrome.exe") {
 		t.Fatal("should not match chrome.exe")
+	}
+	if pl.IsEmpty() {
+		t.Fatal("expected non-empty pattern list")
+	}
+}
+
+func TestPatternList_EdgeCases(t *testing.T) {
+	// Pattern.Raw
+	p, _ := NewPattern("test*")
+	if p.Raw() != "test*" {
+		t.Fatalf("expected raw pattern test*, got %s", p.Raw())
+	}
+
+	// Empty PatternList
+	emptyPL, err := NewPatternList()
+	if err != nil {
+		t.Fatalf("unexpected error for empty pattern list: %v", err)
+	}
+	if !emptyPL.IsEmpty() {
+		t.Fatal("expected empty pattern list")
+	}
+	if emptyPL.Matches("anything") {
+		t.Fatal("empty pattern list should not match anything")
+	}
+
+	// PatternList with empty items
+	plWithEmpty, _ := NewPatternList("", "  ", "valid")
+	if !plWithEmpty.Matches("valid") {
+		t.Fatal("expected match for valid pattern in list")
 	}
 }

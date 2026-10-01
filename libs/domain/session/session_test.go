@@ -56,4 +56,17 @@ func TestSessionMetadata(t *testing.T) {
 	if !ok || foundDisp.ID != 0 {
 		t.Fatal("expected display to be found for (100, 100)")
 	}
+
+	// Point outside displays
+	_, ok = meta.FindDisplayForPoint(geometry.Point{X: 5000, Y: 5000})
+	if ok {
+		t.Fatal("expected no display found for point outside all displays")
+	}
+
+	// TicksCount with equal start and end
+	now := time.Now()
+	equalTR, _ := NewTimeRange(now, now)
+	if equalTR.TicksCount() != 0 {
+		t.Fatalf("expected 0 ticks for equal start and end, got %d", equalTR.TicksCount())
+	}
 }
