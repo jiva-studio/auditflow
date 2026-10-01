@@ -172,3 +172,82 @@ func writeStreamDataToFile(path, streamType string, startTime time.Time, numSeco
 	}
 	return bw.Flush()
 }
+
+// GenerateTemplatePlaceholderRecording creates a synthetic recording specifically designed to trigger
+// rules with placeholder templates where some variables are resolved and others are omitted/unresolved.
+func GenerateTemplatePlaceholderRecording(t *testing.T, targetPath string, employeeID string) (int64, error) {
+	t.Helper()
+
+	f, err := os.Create(targetPath)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	gzw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gzw)
+
+	startTime := time.Date(2026, 3, 10, 10, 0, 0, 0, time.UTC)
+	endTime := startTime.Add(2 * time.Second)
+
+	// 1. Write session/metadata.json
+	metaJSON := fmt.Sprintf(`{
+		"schema_version": "1.0.0",
+		"session_id": "sess-placeholder-test",
+		"employee_id": "%s",
+		"started_at": "%s",
+		"ended_at": "%s",
+		"machine": {
+			"hostname": "PLACEHOLDER-HOST",
+			"os_version": "Linux 6.6",
+			"displays": [
+				{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0, "primary": true}
+			]
+		}
+	}`, employeeID, startTime.Format(time.RFC3339Nano), endTime.Format(time.RFC3339Nano))
+
+	if err := writeTarEntry(tw, "session/metadata.json", []byte(metaJSON)); err != nil {
+		return 0, err
+	}
+
+	// 2. Write event streams
+	ts1 := startTime.Add(100 * time.Millisecond).Format(time.RFC3339Nano)
+	windowsJSONL := fmt.Sprintf(`{"ts":"%s","event":"focus_change","window_title":"Inbox - Outlook","process_name":"OUTLOOK.EXE","window_rect":[0,0,1920,1080]}`+"\n", ts1)
+	if err := writeTarEntry(tw, "session/windows.jsonl", []byte(windowsJSONL)); err != nil {
+		return 0, err
+	}
+
+	ts2 := startTime.Add(200 * time.Millisecond).Format(time.RFC3339Nano)
+	ocrJSONL := fmt.Sprintf(`{"ts":"%s","filename":"screen_0.jpg","display_id":0,"resolution":[1920,1080],"ocr_text_blocks":[{"text":"FW: Project Alpha Update","bounding_box":[100,100,300,50],"confidence":0.99}]}`+"\n", ts2)
+	if err := writeTarEntry(tw, "session/ocr.jsonl", []byte(ocrJSONL)); err != nil {
+		return 0, err
+	}
+
+	ts3 := startTime.Add(300 * time.Millisecond).Format(time.RFC3339Nano)
+	mouseJSONL := fmt.Sprintf(`{"ts":"%s","event":"click","button":"left","mouse_x":150,"mouse_y":120,"click_count":"single"}`+"\n", ts3)
+	if err := writeTarEntry(tw, "session/mouse.jsonl", []byte(mouseJSONL)); err != nil {
+		return 0, err
+	}
+
+	if err := writeTarEntry(tw, "session/clipboard.jsonl", []byte{}); err != nil {
+		return 0, err
+	}
+	if err := writeTarEntry(tw, "session/keyboard.jsonl", []byte{}); err != nil {
+		return 0, err
+	}
+
+	if err := tw.Close(); err != nil {
+		return 0, err
+	}
+	if err := gzw.Close(); err != nil {
+		return 0, err
+	}
+
+	fi, err := f.Stat()
+	if err != nil {
+		return 0, err
+	}
+	return fi.Size(), nil
+}

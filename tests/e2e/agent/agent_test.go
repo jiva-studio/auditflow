@@ -187,3 +187,86 @@ func TestAgent_E2E_AllEmployees(t *testing.T) {
 		})
 	}
 }
+
+func TestAgent_E2E_TemplatePlaceholderCleanup(t *testing.T) {
+	agentBin := testutil.GetAgentBin(t)
+	streamerBin := testutil.GetStreamerBin(t)
+
+	// Create temporary rules configuration with unresolved placeholders in templates
+	tmpDir := t.TempDir()
+	rulesFile := filepath.Join(tmpDir, "rules.json")
+	rulesContent := `{
+		"rules": [
+			{
+				"id": "forwarded-email-placeholder-clean",
+				"when": { "click": "FW:*", "process": ["OUTLOOK.EXE", "olk.exe"] },
+				"popup": {
+					"title": "Forwarded email [{unresolved_tag}]",
+					"body": "Opened: {click} on {window_title} (missing: {unresolved_meta}, code: {missing_code})"
+				}
+			}
+		]
+	}`
+	if err := os.WriteFile(rulesFile, []byte(rulesContent), 0644); err != nil {
+		t.Fatalf("failed to write custom rules file: %v", err)
+	}
+
+	empID := "emp-placeholder-test"
+	archivePath := filepath.Join(tmpDir, empID+".tar.gz")
+	if _, err := testutil.GenerateTemplatePlaceholderRecording(t, archivePath, empID); err != nil {
+		t.Fatalf("failed to generate synthetic recording: %v", err)
+	}
+
+	var mu sync.Mutex
+	var receivedPopups []*v1.Popup
+
+	mockServer := testutil.NewMockCentralServer(t, func(body []byte) {
+		var p v1.Popup
+		if err := proto.Unmarshal(body, &p); err == nil {
+			mu.Lock()
+			receivedPopups = append(receivedPopups, &p)
+			mu.Unlock()
+		}
+	})
+	defer mockServer.Close()
+
+	port := getFreePort(t)
+	agentURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	agentCmd := startAgent(t, agentBin, rulesFile, mockServer.URL, empID, port)
+	defer stopAgent(t, agentCmd)
+
+	waitForHealth(t, agentURL, 5*time.Second)
+
+	out, err := testutil.RunStreamer(t, streamerBin, archivePath, agentURL)
+	if err != nil {
+		t.Fatalf("streamer replay failed: %v, output:\n%s", err, string(out))
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(receivedPopups) != 1 {
+		t.Fatalf("expected 1 popup, got %d", len(receivedPopups))
+	}
+
+	popup := receivedPopups[0]
+	if popup.GetEmployee() != empID {
+		t.Errorf("employee mismatch: got %q, want %q", popup.GetEmployee(), empID)
+	}
+	if popup.GetRule() != "forwarded-email-placeholder-clean" {
+		t.Errorf("rule mismatch: got %q, want %q", popup.GetRule(), "forwarded-email-placeholder-clean")
+	}
+
+	expectedTitle := "Forwarded email []"
+	expectedBody := "Opened: FW: Project Alpha Update on Inbox - Outlook (missing: , code: )"
+
+	if popup.GetTitle() != expectedTitle {
+		t.Errorf("title mismatch: got %q, want %q", popup.GetTitle(), expectedTitle)
+	}
+	if popup.GetBody() != expectedBody {
+		t.Errorf("body mismatch: got %q, want %q", popup.GetBody(), expectedBody)
+	}
+}

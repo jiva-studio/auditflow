@@ -47,7 +47,7 @@ func TestTemplate_PlaceholderSubstitution(t *testing.T) {
 
 	title, body := tmpl.Render(vars)
 	expectedTitle := "Action on Admin Dashboard (chrome.exe)"
-	expectedBody := "Clicked Submit Button with clip TOKEN-12345 and screen Confirmation Message. Repeats: Submit Button, untouched: {missing}"
+	expectedBody := "Clicked Submit Button with clip TOKEN-12345 and screen Confirmation Message. Repeats: Submit Button, untouched: "
 
 	if title != expectedTitle {
 		t.Errorf("got title %q, want %q", title, expectedTitle)
@@ -65,10 +65,16 @@ func TestTemplate_EdgeCases(t *testing.T) {
 		t.Errorf("got body %q, want 'Value: []'", body)
 	}
 
-	// No variables map (nil / empty)
+	// No variables map (nil) -> strips unresolved placeholders
 	title, body := tmpl.Render(nil)
-	if title != "Title" || body != "Value: [{click}]" {
-		t.Errorf("expected untouched template for nil vars: %s / %s", title, body)
+	if title != "Title" || body != "Value: []" {
+		t.Errorf("expected stripped placeholder for nil vars: %s / %s", title, body)
+	}
+
+	// Empty map -> strips unresolved placeholders
+	title, body = tmpl.Render(map[string]string{})
+	if title != "Title" || body != "Value: []" {
+		t.Errorf("expected stripped placeholder for empty map: %s / %s", title, body)
 	}
 
 	// Unicode and emojis
@@ -79,5 +85,41 @@ func TestTemplate_EdgeCases(t *testing.T) {
 	})
 	if uTitle != "Уведомление: Отчет.xlsx - Excel" || uBody != "Клик: Удалить 🚀" {
 		t.Errorf("unicode render failed: %s / %s", uTitle, uBody)
+	}
+}
+
+func TestTemplate_UnresolvedPlaceholderStripping(t *testing.T) {
+	// Multiple missing variables in title and body
+	tmpl, err := NewPopupTemplate(
+		"Alert {app} on {host}",
+		"User {user} clicked {click} on {window_title} with {clipboard} and {ocr} info: {extra}",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	title, body := tmpl.Render(map[string]string{
+		"user":  "Alice",
+		"click": "Save",
+	})
+
+	expectedTitle := "Alert  on "
+	expectedBody := "User Alice clicked Save on  with  and  info: "
+
+	if title != expectedTitle {
+		t.Errorf("got title %q, want %q", title, expectedTitle)
+	}
+	if body != expectedBody {
+		t.Errorf("got body %q, want %q", body, expectedBody)
+	}
+
+	// Adjacent placeholders
+	tmplAdj, _ := NewPopupTemplate("{a}{b}{c}", "prefix {x}{y}{z} suffix")
+	adjTitle, adjBody := tmplAdj.Render(map[string]string{"b": "B", "y": "Y"})
+	if adjTitle != "B" {
+		t.Errorf("got adjTitle %q, want %q", adjTitle, "B")
+	}
+	if adjBody != "prefix Y suffix" {
+		t.Errorf("got adjBody %q, want %q", adjBody, "prefix Y suffix")
 	}
 }
