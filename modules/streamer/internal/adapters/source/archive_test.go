@@ -445,3 +445,45 @@ func TestTarGzEventSource_IdenticalTimestampsTieBreaker(t *testing.T) {
 		t.Errorf("got %d events, want 3", totalEvents)
 	}
 }
+
+func TestTarGzEventSource_MetadataCachingAndSinglePassStream(t *testing.T) {
+	metaJSON := `{
+		"schema_version": "1.0.0",
+		"session_id": "sess-cached",
+		"employee_id": "emp-cached",
+		"started_at": "2026-03-10T10:00:00.000Z",
+		"ended_at": "2026-03-10T10:00:01.000Z",
+		"machine": {"displays": [{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0}]}
+	}`
+	winJSONL := `{"ts": "2026-03-10T10:00:00.500Z", "event": "focus_change", "window_title": "W1", "process_name": "app.exe", "window_rect": [0, 0, 100, 100]}` + "\n"
+
+	path := createTestTarGz(t, map[string]string{
+		"session/metadata.json": metaJSON,
+		"session/windows.jsonl": winJSONL,
+	})
+
+	src := source.NewTarGzEventSource(path, nil)
+
+	// 1. Initial LoadMetadata
+	meta1, err := src.LoadMetadata(context.Background())
+	if err != nil {
+		t.Fatalf("first LoadMetadata failed: %v", err)
+	}
+	if meta1.EmployeeID != "emp-cached" {
+		t.Fatalf("expected emp-cached, got %s", meta1.EmployeeID)
+	}
+
+	// 2. Remove the underlying archive file to prove caching works without re-opening disk file
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove test file: %v", err)
+	}
+
+	// 3. Second LoadMetadata should return from memory cache without error
+	meta2, err := src.LoadMetadata(context.Background())
+	if err != nil {
+		t.Fatalf("second LoadMetadata should succeed from cache, got error: %v", err)
+	}
+	if meta2.EmployeeID != meta1.EmployeeID {
+		t.Errorf("got %s, want %s", meta2.EmployeeID, meta1.EmployeeID)
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"assessment/libs/domain/display"
@@ -37,6 +38,8 @@ var (
 type TarGzEventSource struct {
 	archivePath string
 	reporter    ports.ErrorReporter
+	metaMu      sync.RWMutex
+	cachedMeta  *session.Metadata
 }
 
 // NewTarGzEventSource creates a new TarGzEventSource with the given reporter (defaults to stderr LogReporter if nil).
@@ -74,25 +77,58 @@ type rawDisplay struct {
 	Primary bool    `json:"primary"`
 }
 
-// LoadMetadata extracts and parses metadata.json from the tar.gz archive.
-func (s *TarGzEventSource) LoadMetadata(ctx context.Context) (session.Metadata, error) {
+func (s *TarGzEventSource) getCachedMetadata() (session.Metadata, bool) {
+	s.metaMu.RLock()
+	defer s.metaMu.RUnlock()
+	if s.cachedMeta != nil {
+		return *s.cachedMeta, true
+	}
+	return session.Metadata{}, false
+}
+
+func (s *TarGzEventSource) setCachedMetadata(meta session.Metadata) {
+	s.metaMu.Lock()
+	defer s.metaMu.Unlock()
+	s.cachedMeta = &meta
+}
+
+func (s *TarGzEventSource) openTarReader() (*os.File, *gzip.Reader, *tar.Reader, error) {
 	f, err := os.Open(s.archivePath)
 	if err != nil {
-		return session.Metadata{}, fmt.Errorf("%w: %s", ErrRecordingNotFound, err.Error())
+		return nil, nil, nil, fmt.Errorf("%w: %s", ErrRecordingNotFound, err.Error())
 	}
-	defer func() {
-		_ = f.Close()
-	}()
-
 	gzr, err := gzip.NewReader(f)
 	if err != nil {
-		return session.Metadata{}, fmt.Errorf("%w: open gzip reader: %s", ErrCorruptArchive, err.Error())
+		_ = f.Close()
+		return nil, nil, nil, fmt.Errorf("%w: open gzip reader: %s", ErrCorruptArchive, err.Error())
+	}
+	return f, gzr, tar.NewReader(gzr), nil
+}
+
+// LoadMetadata extracts and parses metadata.json from the tar.gz archive, caching the result.
+func (s *TarGzEventSource) LoadMetadata(ctx context.Context) (session.Metadata, error) {
+	if meta, ok := s.getCachedMetadata(); ok {
+		return meta, nil
+	}
+
+	f, gzr, tr, err := s.openTarReader()
+	if err != nil {
+		return session.Metadata{}, err
 	}
 	defer func() {
 		_ = gzr.Close()
+		_ = f.Close()
 	}()
 
-	tr := tar.NewReader(gzr)
+	meta, err := s.findMetadataInTar(ctx, tr)
+	if err != nil {
+		return session.Metadata{}, err
+	}
+	s.setCachedMetadata(meta)
+	return meta, nil
+}
+
+func (s *TarGzEventSource) findMetadataInTar(ctx context.Context, tr *tar.Reader) (session.Metadata, error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return session.Metadata{}, err
@@ -110,7 +146,6 @@ func (s *TarGzEventSource) LoadMetadata(ctx context.Context) (session.Metadata, 
 			return s.decodeMetadataHeader(tr)
 		}
 	}
-
 	return session.Metadata{}, ErrMetadataNotFound
 }
 
@@ -162,17 +197,12 @@ func mapRawMetadata(raw rawMetadata) (session.Metadata, error) {
 
 // StreamTicks streams 1-second TickBatches using memory-bounded K-Way Merge across event streams.
 func (s *TarGzEventSource) StreamTicks(ctx context.Context) (<-chan events.TickBatch, <-chan error, error) {
-	meta, err := s.LoadMetadata(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	tmpDir, err := os.MkdirTemp("", "streamer-session-*")
 	if err != nil {
 		return nil, nil, fmt.Errorf("create temp extraction dir: %w", err)
 	}
 
-	extractedFiles, err := s.extractJsonlFiles(ctx, tmpDir)
+	meta, extractedFiles, err := s.extractSessionArchive(ctx, tmpDir)
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		return nil, nil, err
@@ -192,29 +222,39 @@ func (s *TarGzEventSource) StreamTicks(ctx context.Context) (<-chan events.TickB
 	return tickCh, errCh, nil
 }
 
-func (s *TarGzEventSource) extractJsonlFiles(ctx context.Context, targetDir string) ([]string, error) {
-	f, err := os.Open(s.archivePath)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrRecordingNotFound, err.Error())
-	}
-	defer func() {
-		_ = f.Close()
-	}()
+func (s *TarGzEventSource) extractSessionArchive(ctx context.Context, targetDir string) (session.Metadata, []string, error) {
+	cachedMeta, metaFound := s.getCachedMetadata()
 
-	gzr, err := gzip.NewReader(f)
+	f, gzr, tr, err := s.openTarReader()
 	if err != nil {
-		return nil, fmt.Errorf("%w: open gzip reader: %s", ErrCorruptArchive, err.Error())
+		return session.Metadata{}, nil, err
 	}
 	defer func() {
 		_ = gzr.Close()
+		_ = f.Close()
 	}()
 
-	tr := tar.NewReader(gzr)
+	meta, files, err := s.processArchiveEntries(ctx, tr, targetDir, cachedMeta, metaFound)
+	if err != nil {
+		return session.Metadata{}, nil, err
+	}
+	sort.Strings(files)
+	return meta, files, nil
+}
+
+func (s *TarGzEventSource) processArchiveEntries(
+	ctx context.Context,
+	tr *tar.Reader,
+	targetDir string,
+	initialMeta session.Metadata,
+	metaFound bool,
+) (session.Metadata, []string, error) {
 	var extractedFiles []string
+	meta := initialMeta
 
 	for {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return session.Metadata{}, nil, err
 		}
 
 		header, err := tr.Next()
@@ -222,20 +262,43 @@ func (s *TarGzEventSource) extractJsonlFiles(ctx context.Context, targetDir stri
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("%w: read tar entry: %s", ErrCorruptArchive, err.Error())
+			return session.Metadata{}, nil, fmt.Errorf("%w: read tar entry: %s", ErrCorruptArchive, err.Error())
 		}
 
-		outPath, err := extractTarEntry(tr, header, targetDir)
+		outPath, err := s.processSingleEntry(tr, header, targetDir, &metaFound, &meta)
 		if err != nil {
-			return nil, err
+			return session.Metadata{}, nil, err
 		}
 		if outPath != "" {
 			extractedFiles = append(extractedFiles, outPath)
 		}
 	}
 
-	sort.Strings(extractedFiles)
-	return extractedFiles, nil
+	if !metaFound {
+		return session.Metadata{}, nil, ErrMetadataNotFound
+	}
+	return meta, extractedFiles, nil
+}
+
+func (s *TarGzEventSource) processSingleEntry(
+	tr *tar.Reader,
+	header *tar.Header,
+	targetDir string,
+	metaFound *bool,
+	meta *session.Metadata,
+) (string, error) {
+	if strings.HasSuffix(header.Name, "metadata.json") && !*metaFound {
+		m, err := s.decodeMetadataHeader(tr)
+		if err != nil {
+			return "", err
+		}
+		*meta = m
+		*metaFound = true
+		s.setCachedMetadata(m)
+		return "", nil
+	}
+
+	return extractTarEntry(tr, header, targetDir)
 }
 
 func extractTarEntry(tr *tar.Reader, header *tar.Header, targetDir string) (string, error) {
