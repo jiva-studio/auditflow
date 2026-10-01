@@ -83,6 +83,41 @@ func TestHTTPHandler_Health(t *testing.T) {
 	}
 }
 
+func TestHTTPHandler_LiveAndReady(t *testing.T) {
+	svc := &mockServerService{}
+	h, _ := handler.NewHTTPHandler(svc)
+
+	// Live
+	recLive := httptest.NewRecorder()
+	reqLive := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+	h.ServeHTTP(recLive, reqLive)
+	if recLive.Code != http.StatusOK || !stringsContains(recLive.Body.String(), `"status":"live"`) {
+		t.Fatalf("unexpected live response: %d, body: %s", recLive.Code, recLive.Body.String())
+	}
+
+	recLivePost := httptest.NewRecorder()
+	reqLivePost := httptest.NewRequest(http.MethodPost, "/health/live", nil)
+	h.ServeHTTP(recLivePost, reqLivePost)
+	if recLivePost.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 on POST /health/live, got %d", recLivePost.Code)
+	}
+
+	// Ready
+	recReady := httptest.NewRecorder()
+	reqReady := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	h.ServeHTTP(recReady, reqReady)
+	if recReady.Code != http.StatusOK || !stringsContains(recReady.Body.String(), `"status":"ready"`) {
+		t.Fatalf("unexpected ready response: %d, body: %s", recReady.Code, recReady.Body.String())
+	}
+
+	recReadyPost := httptest.NewRecorder()
+	reqReadyPost := httptest.NewRequest(http.MethodPost, "/health/ready", nil)
+	h.ServeHTTP(recReadyPost, reqReadyPost)
+	if recReadyPost.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 on POST /health/ready, got %d", recReadyPost.Code)
+	}
+}
+
 func TestHTTPHandler_RecordPopup_Protobuf(t *testing.T) {
 	svc := &mockServerService{}
 	h, _ := handler.NewHTTPHandler(svc)
