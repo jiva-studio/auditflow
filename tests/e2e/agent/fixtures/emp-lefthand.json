@@ -1,0 +1,34 @@
+{
+  "employee_id": "emp-lefthand",
+  "total_popups": 4,
+  "popups": [
+    {
+      "employee": "emp-lefthand",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T10:00:00Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Left-Handed Budget Review"
+    },
+    {
+      "employee": "emp-lefthand",
+      "rule": "jira-ticket-done",
+      "ts": "2026-03-10T10:00:01Z",
+      "title": "Ticket moved to Done",
+      "body": "DEV-42 - Jira - Google Chrome"
+    },
+    {
+      "employee": "emp-lefthand",
+      "rule": "urgent-email-opened",
+      "ts": "2026-03-10T10:00:02Z",
+      "title": "Urgent email",
+      "body": "Urgent Security Patch"
+    },
+    {
+      "employee": "emp-lefthand",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T10:00:03Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-123456. Attach the invoice to this email?"
+    }
+  ]
+}

@@ -172,3 +172,96 @@ func writeStreamDataToFile(path, streamType string, startTime time.Time, numSeco
 	}
 	return bw.Flush()
 }
+
+// GenerateLeftHandedMouseRecording creates a synthetic recording containing left-handed primary clicks,
+// move gestures, and non-primary mouse clicks for E2E testing.
+func GenerateLeftHandedMouseRecording(t *testing.T, targetPath string) error {
+	t.Helper()
+
+	f, err := os.Create(targetPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	gzw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gzw)
+
+	startTime := time.Date(2026, 3, 10, 10, 0, 0, 0, time.UTC)
+	endTime := startTime.Add(5 * time.Second)
+
+	metaJSON := fmt.Sprintf(`{
+		"schema_version": "1.0.0",
+		"session_id": "sess-lefthanded-mouse",
+		"employee_id": "emp-lefthanded",
+		"started_at": "%s",
+		"ended_at": "%s",
+		"machine": {
+			"hostname": "LEFT-WORKSTATION",
+			"os_version": "Linux 6.6",
+			"displays": [
+				{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0, "primary": true}
+			]
+		}
+	}`, startTime.Format(time.RFC3339Nano), endTime.Format(time.RFC3339Nano))
+
+	if err := writeTarEntry(tw, "session/metadata.json", []byte(metaJSON)); err != nil {
+		return err
+	}
+
+	// 1. Second 1: Outlook - Forwarded Email with Left-Handed "primary" button click and move/middle gestures
+	ts1_ocr := startTime.Add(1*time.Second + 100*time.Millisecond).Format(time.RFC3339Nano)
+	ts1_win := startTime.Add(1*time.Second + 200*time.Millisecond).Format(time.RFC3339Nano)
+	ts1_move := startTime.Add(1*time.Second + 250*time.Millisecond).Format(time.RFC3339Nano)
+	ts1_middle := startTime.Add(1*time.Second + 270*time.Millisecond).Format(time.RFC3339Nano)
+	ts1_click := startTime.Add(1*time.Second + 300*time.Millisecond).Format(time.RFC3339Nano)
+
+	ocr1 := fmt.Sprintf(`{"ts":"%s","filename":"s1.jpg","display_id":0,"resolution":[1920,1080],"ocr_text_blocks":[{"text":"FW: Left Handed Budget Update","bounding_box":[100,200,350,40],"confidence":1.0}]}`+"\n", ts1_ocr)
+	win1 := fmt.Sprintf(`{"ts":"%s","event":"focus_change","window_title":"Inbox - Outlook","process_name":"OUTLOOK.EXE","window_rect":[0,0,1920,1080]}`+"\n", ts1_win)
+	mouse1_move := fmt.Sprintf(`{"ts":"%s","event":"move","button":"primary","mouse_x":150,"mouse_y":220,"click_count":"none"}`+"\n", ts1_move)
+	mouse1_middle := fmt.Sprintf(`{"ts":"%s","event":"click","button":"middle","mouse_x":150,"mouse_y":220,"click_count":"single"}`+"\n", ts1_middle)
+	mouse1_click := fmt.Sprintf(`{"ts":"%s","event":"click","button":"primary","mouse_x":150,"mouse_y":220,"click_count":"single"}`+"\n", ts1_click)
+
+	// 2. Second 2: Jira Done with "main" button click and drag gestures
+	ts2_ocr := startTime.Add(2*time.Second + 100*time.Millisecond).Format(time.RFC3339Nano)
+	ts2_win := startTime.Add(2*time.Second + 200*time.Millisecond).Format(time.RFC3339Nano)
+	ts2_drag := startTime.Add(2*time.Second + 250*time.Millisecond).Format(time.RFC3339Nano)
+	ts2_click := startTime.Add(2*time.Second + 300*time.Millisecond).Format(time.RFC3339Nano)
+
+	ocr2 := fmt.Sprintf(`{"ts":"%s","filename":"s2.jpg","display_id":0,"resolution":[1920,1080],"ocr_text_blocks":[{"text":"Done","bounding_box":[100,100,80,30],"confidence":1.0}]}`+"\n", ts2_ocr)
+	win2 := fmt.Sprintf(`{"ts":"%s","event":"focus_change","window_title":"DEV-42 - Jira - Google Chrome","process_name":"chrome.exe","window_rect":[0,0,1920,1080]}`+"\n", ts2_win)
+	mouse2_drag := fmt.Sprintf(`{"ts":"%s","event":"drag","button":"main","mouse_x":120,"mouse_y":110,"click_count":"none"}`+"\n", ts2_drag)
+	mouse2_click := fmt.Sprintf(`{"ts":"%s","event":"click","button":"main","mouse_x":120,"mouse_y":110,"click_count":"single"}`+"\n", ts2_click)
+
+	// 3. Second 3: Urgent email with "mousedown" action and scroll gestures
+	ts3_ocr := startTime.Add(3*time.Second + 100*time.Millisecond).Format(time.RFC3339Nano)
+	ts3_win := startTime.Add(3*time.Second + 200*time.Millisecond).Format(time.RFC3339Nano)
+	ts3_scroll := startTime.Add(3*time.Second + 250*time.Millisecond).Format(time.RFC3339Nano)
+	ts3_click := startTime.Add(3*time.Second + 300*time.Millisecond).Format(time.RFC3339Nano)
+
+	ocr3 := fmt.Sprintf(`{"ts":"%s","filename":"s3.jpg","display_id":0,"resolution":[1920,1080],"ocr_text_blocks":[{"text":"Urgent Security Patch Review","bounding_box":[200,300,350,40],"confidence":1.0}]}`+"\n", ts3_ocr)
+	win3 := fmt.Sprintf(`{"ts":"%s","event":"focus_change","window_title":"Inbox - olk.exe","process_name":"olk.exe","window_rect":[0,0,1920,1080]}`+"\n", ts3_win)
+	mouse3_scroll := fmt.Sprintf(`{"ts":"%s","event":"scroll","button":"primary","mouse_x":250,"mouse_y":320,"click_count":"none"}`+"\n", ts3_scroll)
+	mouse3_click := fmt.Sprintf(`{"ts":"%s","event":"mousedown","button":"primary","mouse_x":250,"mouse_y":320,"click_count":"single"}`+"\n", ts3_click)
+
+	ocrContent := ocr1 + ocr2 + ocr3
+	winContent := win1 + win2 + win3
+	mouseContent := mouse1_move + mouse1_middle + mouse1_click + mouse2_drag + mouse2_click + mouse3_scroll + mouse3_click
+
+	if err := writeTarEntry(tw, "session/ocr.jsonl", []byte(ocrContent)); err != nil {
+		return err
+	}
+	if err := writeTarEntry(tw, "session/windows.jsonl", []byte(winContent)); err != nil {
+		return err
+	}
+	if err := writeTarEntry(tw, "session/mouse.jsonl", []byte(mouseContent)); err != nil {
+		return err
+	}
+
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	return gzw.Close()
+}
