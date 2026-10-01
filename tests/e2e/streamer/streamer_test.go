@@ -42,7 +42,7 @@ func TestStreamer_E2E(t *testing.T) {
 	binPath := testutil.GetStreamerBin(t)
 	dataDir := testutil.GetDataDir(t)
 
-	tests := []string{"emp-1", "emp-2", "emp-3"}
+	tests := []string{"emp-1", "emp-2", "emp-3", "emp-synthetic", "emp-edge"}
 
 	for _, name := range tests {
 		name := name
