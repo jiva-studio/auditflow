@@ -649,3 +649,48 @@ func TestTarGzEventSource_MetadataCachingAndSinglePassStream(t *testing.T) {
 		t.Errorf("got %s, want %s", meta2.EmployeeID, meta1.EmployeeID)
 	}
 }
+
+func TestTarGzEventSource_InvalidGeometryWarnings(t *testing.T) {
+	metaJSON := `{
+		"schema_version": "1.0.0",
+		"session_id": "sess-geom-warn",
+		"employee_id": "emp-geom-warn",
+		"started_at": "2026-03-10T10:00:00.000Z",
+		"ended_at": "2026-03-10T10:00:01.000Z",
+		"machine": {"displays": [{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0}]}
+	}`
+	// Negative width in window_rect and negative height in ocr bounding_box
+	winJSONL := `{"ts": "2026-03-10T10:00:00.200Z", "event": "focus_change", "window_title": "W1", "process_name": "app.exe", "window_rect": [0, 0, -50, 100]}` + "\n"
+	ocrJSONL := `{"ts": "2026-03-10T10:00:00.400Z", "filename": "s.jpg", "display_id": 0, "resolution": [1920, 1080], "window_rect": [0, 0, -100, 100], "ocr_text_blocks": [{"text": "Sample", "bounding_box": [10, 10, 50, -20], "confidence": 0.9}]}` + "\n"
+
+	path := createTestTarGz(t, map[string]string{
+		"session/metadata.json": metaJSON,
+		"session/windows.jsonl": winJSONL,
+		"session/ocr.jsonl":     ocrJSONL,
+	})
+
+	rep := reporter.NewMockReporter()
+	src := source.NewTarGzEventSource(path, rep)
+
+	tickCh, errCh, err := src.StreamTicks(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected StreamTicks error: %v", err)
+	}
+
+	for b := range tickCh {
+		_ = b
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("unexpected stream error: %v", err)
+	}
+
+	warnCount := 0
+	for _, it := range rep.Items {
+		if it.Level == "WARN" {
+			warnCount++
+		}
+	}
+	if warnCount < 3 {
+		t.Errorf("expected at least 3 geometry warnings (window rect, ocr window rect, ocr block bounding box), got %d: %+v", warnCount, rep.Items)
+	}
+}

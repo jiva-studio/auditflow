@@ -377,7 +377,7 @@ func (st *eventStream) advance() error {
 		if len(strings.TrimSpace(string(line))) == 0 {
 			continue
 		}
-		ev, err := parseEventLine(st.filename, line)
+		ev, err := parseEventLine(st.filename, line, st.reporter)
 		if err != nil {
 			st.reporter.ReportWarning("malformed event line skipped", map[string]any{
 				"filename": st.filename,
@@ -581,16 +581,16 @@ func (s *TarGzEventSource) streamKWayMerge(
 	}
 }
 
-func parseEventLine(filename string, line []byte) (events.Event, error) {
+func parseEventLine(filename string, line []byte, rep ports.ErrorReporter) (events.Event, error) {
 	switch filename {
 	case "windows.jsonl":
-		return parseWindowEvent(line)
+		return parseWindowEvent(line, rep)
 	case "mouse.jsonl":
 		return parseMouseEvent(line)
 	case "clipboard.jsonl":
 		return parseClipboardEvent(line)
 	case "ocr.jsonl":
-		return parseOCREvent(line)
+		return parseOCREvent(line, rep)
 	case "keyboard.jsonl", "keystrokes.jsonl", "mouse_scroll.jsonl", "mouse_drag.jsonl":
 		return parseGenericEvent(filename, line)
 	default:
@@ -611,12 +611,18 @@ type rawWindowEvent struct {
 	DwellTimeMS int       `json:"dwell_time_ms"`
 }
 
-func parseWindowEvent(data []byte) (events.Event, error) {
+func parseWindowEvent(data []byte, rep ports.ErrorReporter) (events.Event, error) {
 	var r rawWindowEvent
 	if err := json.Unmarshal(data, &r); err != nil {
 		return nil, fmt.Errorf("unmarshal window event: %w", err)
 	}
-	rect, _ := geometry.NewRectangle(r.WindowRect[0], r.WindowRect[1], r.WindowRect[2], r.WindowRect[3])
+	rect, err := geometry.NewRectangle(r.WindowRect[0], r.WindowRect[1], r.WindowRect[2], r.WindowRect[3])
+	if err != nil && rep != nil {
+		rep.ReportWarning("invalid window_rect in window event", map[string]any{
+			"window_rect": r.WindowRect,
+			"error":       err.Error(),
+		})
+	}
 	return events.WindowEvent{
 		Timestamp:       r.TS,
 		Action:          r.Event,
@@ -700,17 +706,29 @@ type rawOCRTextBlock struct {
 	Confidence  float64 `json:"confidence"`
 }
 
-func parseOCREvent(data []byte) (events.Event, error) {
+func parseOCREvent(data []byte, rep ports.ErrorReporter) (events.Event, error) {
 	var r rawOCREvent
 	if err := json.Unmarshal(data, &r); err != nil {
 		return nil, fmt.Errorf("unmarshal ocr event: %w", err)
 	}
 	res := geometry.Size{Width: r.Resolution[0], Height: r.Resolution[1]}
-	rect, _ := geometry.NewRectangle(r.WindowRect[0], r.WindowRect[1], r.WindowRect[2], r.WindowRect[3])
+	rect, err := geometry.NewRectangle(r.WindowRect[0], r.WindowRect[1], r.WindowRect[2], r.WindowRect[3])
+	if err != nil && rep != nil {
+		rep.ReportWarning("invalid window_rect in ocr event", map[string]any{
+			"window_rect": r.WindowRect,
+			"error":       err.Error(),
+		})
+	}
 
 	var blocks []display.OCRTextBlock
 	for _, b := range r.Blocks {
-		box, _ := geometry.NewRectangle(b.BoundingBox[0], b.BoundingBox[1], b.BoundingBox[2], b.BoundingBox[3])
+		box, err := geometry.NewRectangle(b.BoundingBox[0], b.BoundingBox[1], b.BoundingBox[2], b.BoundingBox[3])
+		if err != nil && rep != nil {
+			rep.ReportWarning("invalid bounding_box in ocr block", map[string]any{
+				"bounding_box": b.BoundingBox,
+				"error":        err.Error(),
+			})
+		}
 		blocks = append(blocks, display.OCRTextBlock{
 			Text:       b.Text,
 			Box:        box,
