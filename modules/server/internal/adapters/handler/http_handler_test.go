@@ -230,12 +230,12 @@ func TestHTTPHandler_QueryPopups_JSON(t *testing.T) {
 		t.Fatalf("query parameters not mapped to filter properly: %+v", svc.lastFilter)
 	}
 
-	var resp mapper.AuditResponseDTO
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	var popups []mapper.PopupDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &popups); err != nil {
 		t.Fatalf("failed to decode JSON response: %v", err)
 	}
-	if resp.Total != 1 || resp.Popups[0].Title != "Title 1" {
-		t.Fatalf("unexpected response payload: %+v", resp)
+	if len(popups) != 1 || popups[0].Title != "Title 1" {
+		t.Fatalf("unexpected response payload: %+v", popups)
 	}
 }
 

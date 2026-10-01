@@ -30,11 +30,6 @@ type agentFixture struct {
 	Popups      []expectedPopup `json:"popups"`
 }
 
-type serverResponseDTO struct {
-	Total  int             `json:"total"`
-	Popups []expectedPopup `json:"popups"`
-}
-
 func loadFixture(t *testing.T, empID string) agentFixture {
 	t.Helper()
 	root := testutil.FindProjectRoot(t)
@@ -106,7 +101,7 @@ func stopProcess(t *testing.T, cmd *exec.Cmd) {
 	}
 }
 
-func queryServer(t *testing.T, serverURL, queryPath string) serverResponseDTO {
+func queryServer(t *testing.T, serverURL, queryPath string) []expectedPopup {
 	t.Helper()
 	resp, err := http.Get(serverURL + queryPath)
 	if err != nil {
@@ -123,11 +118,11 @@ func queryServer(t *testing.T, serverURL, queryPath string) serverResponseDTO {
 		t.Fatalf("failed to read response body: %v", err)
 	}
 
-	var dto serverResponseDTO
-	if err := json.Unmarshal(body, &dto); err != nil {
+	var popups []expectedPopup
+	if err := json.Unmarshal(body, &popups); err != nil {
 		t.Fatalf("failed to parse JSON response (%s): %v", string(body), err)
 	}
-	return dto
+	return popups
 }
 
 func TestServer_E2E_FullPipeline(t *testing.T) {
@@ -187,16 +182,16 @@ func TestServer_E2E_FullPipeline(t *testing.T) {
 		fixture := loadFixture(t, empID)
 		totalExpected += fixture.TotalPopups
 
-		dto := queryServer(t, serverURL, fmt.Sprintf("/audit?employee=%s", empID))
-		if dto.Total != fixture.TotalPopups {
-			t.Errorf("[%s] expected %d popups, got %d", empID, fixture.TotalPopups, dto.Total)
+		popups := queryServer(t, serverURL, fmt.Sprintf("/audit?employee=%s", empID))
+		if len(popups) != fixture.TotalPopups {
+			t.Errorf("[%s] expected %d popups, got %d", empID, fixture.TotalPopups, len(popups))
 		}
 
 		for i, exp := range fixture.Popups {
-			if i >= len(dto.Popups) {
+			if i >= len(popups) {
 				t.Fatalf("[%s] missing expected popup #%d", empID, i+1)
 			}
-			act := dto.Popups[i]
+			act := popups[i]
 			if act.Employee != exp.Employee || act.Rule != exp.Rule || act.Title != exp.Title || act.Body != exp.Body {
 				t.Errorf("[%s] popup #%d mismatch:\n  got:  %+v\n  want: %+v", empID, i+1, act, exp)
 			}
@@ -204,19 +199,19 @@ func TestServer_E2E_FullPipeline(t *testing.T) {
 	}
 
 	// 4. Query total popups across all employees
-	allDTO := queryServer(t, serverURL, "/audit")
-	t.Logf("Total recorded popups on Central Server: %d (expected %d)", allDTO.Total, totalExpected)
-	if allDTO.Total != totalExpected {
-		t.Fatalf("expected %d total popups, got %d", totalExpected, allDTO.Total)
+	allPopups := queryServer(t, serverURL, "/audit")
+	t.Logf("Total recorded popups on Central Server: %d (expected %d)", len(allPopups), totalExpected)
+	if len(allPopups) != totalExpected {
+		t.Fatalf("expected %d total popups, got %d", totalExpected, len(allPopups))
 	}
 
 	// 5. Query by specific rule
-	invoiceDTO := queryServer(t, serverURL, "/audit?rule=invoice-ready-to-attach")
-	t.Logf("Total 'invoice-ready-to-attach' popups on Central Server: %d", invoiceDTO.Total)
-	if invoiceDTO.Total == 0 {
+	invoicePopups := queryServer(t, serverURL, "/audit?rule=invoice-ready-to-attach")
+	t.Logf("Total 'invoice-ready-to-attach' popups on Central Server: %d", len(invoicePopups))
+	if len(invoicePopups) == 0 {
 		t.Fatal("expected non-zero popups for invoice-ready-to-attach rule")
 	}
-	for _, p := range invoiceDTO.Popups {
+	for _, p := range invoicePopups {
 		if p.Rule != "invoice-ready-to-attach" {
 			t.Errorf("expected rule invoice-ready-to-attach, got %s", p.Rule)
 		}

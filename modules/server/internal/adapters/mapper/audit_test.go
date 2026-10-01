@@ -118,15 +118,22 @@ func TestToProtoAuditResponse_Error(t *testing.T) {
 	}
 }
 
-func TestToDTOAndResponseDTO(t *testing.T) {
+func TestToDTOAndToDTOList(t *testing.T) {
 	p1, _ := audit.NewPopup("emp-1", "rule-1", "2026-03-10T12:00:00Z", "Title 1", "Body 1")
 	p2, _ := audit.NewPopup("emp-2", "rule-2", "2026-03-10T13:00:00Z", "Title 2", "Body 2")
 
-	respDTO := mapper.ToResponseDTO([]audit.Popup{p1, p2})
-	if respDTO.Total != 2 || len(respDTO.Popups) != 2 {
-		t.Fatalf("expected 2 DTOs, got %d", respDTO.Total)
+	dto1 := mapper.ToDTO(p1)
+	if dto1.Employee != "emp-1" || dto1.Rule != "rule-1" || dto1.Title != "Title 1" {
+		t.Fatalf("mismatched DTO contents: %+v", dto1)
 	}
-	if respDTO.Popups[0].Employee != "emp-1" || respDTO.Popups[1].Employee != "emp-2" {
-		t.Fatalf("mismatched DTO contents: %+v", respDTO)
+
+	list := mapper.ToDTOList([]audit.Popup{p1, p2})
+	if len(list) != 2 || list[0].Employee != "emp-1" || list[1].Employee != "emp-2" {
+		t.Fatalf("mismatched DTO list contents: %+v", list)
+	}
+
+	emptyList := mapper.ToDTOList(nil)
+	if emptyList == nil || len(emptyList) != 0 {
+		t.Fatalf("expected empty non-nil slice, got: %+v", emptyList)
 	}
 }

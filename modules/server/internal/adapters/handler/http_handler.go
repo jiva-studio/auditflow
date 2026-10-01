@@ -158,7 +158,7 @@ func (h *HTTPHandler) writeProtoResponse(w http.ResponseWriter, popups []audit.P
 }
 
 func (h *HTTPHandler) writeJSONResponse(w http.ResponseWriter, popups []audit.Popup) {
-	respDTO := mapper.ToResponseDTO(popups)
+	respDTO := mapper.ToDTOList(popups)
 	bytes, err := json.Marshal(respDTO)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

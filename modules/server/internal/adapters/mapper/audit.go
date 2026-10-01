@@ -26,12 +26,6 @@ type PopupDTO struct {
 	Body     string `json:"body"`
 }
 
-// AuditResponseDTO represents the top-level JSON response containing popups.
-type AuditResponseDTO struct {
-	Total  int        `json:"total"`
-	Popups []PopupDTO `json:"popups"`
-}
-
 // ToDomainPopup converts a Protobuf v1.Popup to a domain audit.Popup.
 func ToDomainPopup(pb *v1.Popup) (audit.Popup, error) {
 	if pb == nil {
@@ -97,14 +91,11 @@ func ToDTO(p audit.Popup) PopupDTO {
 	}
 }
 
-// ToResponseDTO converts a slice of domain popups to an AuditResponseDTO.
-func ToResponseDTO(popups []audit.Popup) AuditResponseDTO {
-	dtos := make([]PopupDTO, len(popups))
-	for i, p := range popups {
-		dtos[i] = ToDTO(p)
+// ToDTOList converts a slice of domain popups to a slice of PopupDTO.
+func ToDTOList(popups []audit.Popup) []PopupDTO {
+	dtos := make([]PopupDTO, 0, len(popups))
+	for _, p := range popups {
+		dtos = append(dtos, ToDTO(p))
 	}
-	return AuditResponseDTO{
-		Total:  len(dtos),
-		Popups: dtos,
-	}
+	return dtos
 }
