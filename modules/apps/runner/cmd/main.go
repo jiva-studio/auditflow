@@ -142,28 +142,7 @@ func runWorkerPool(ctx context.Context, archives []string, cfg runnerConfig, log
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			for archivePath := range jobs {
-				if ctx.Err() != nil {
-					return
-				}
-				logger.InfoContext(ctx, "worker processing archive",
-					slog.Int("worker_id", workerID),
-					slog.String("archive", filepath.Base(archivePath)),
-				)
-
-				if err := processSingleArchive(ctx, archivePath, cfg, logger); err != nil {
-					errorCount.Add(1)
-					logger.ErrorContext(ctx, "failed processing archive",
-						slog.String("archive", filepath.Base(archivePath)),
-						slog.Any("error", err),
-					)
-				} else {
-					completedCount.Add(1)
-					logger.InfoContext(ctx, "successfully processed archive",
-						slog.String("archive", filepath.Base(archivePath)),
-					)
-				}
-			}
+			executeWorker(ctx, workerID, jobs, cfg, logger, &errorCount, &completedCount)
 		}(i + 1)
 	}
 
@@ -183,6 +162,38 @@ func runWorkerPool(ctx context.Context, archives []string, cfg runnerConfig, log
 		slog.Int("total", len(archives)),
 	)
 	return nil
+}
+
+func executeWorker(
+	ctx context.Context,
+	workerID int,
+	jobs <-chan string,
+	cfg runnerConfig,
+	logger *slog.Logger,
+	errorCount, completedCount *atomic.Int64,
+) {
+	for archivePath := range jobs {
+		if ctx.Err() != nil {
+			return
+		}
+		name := filepath.Base(archivePath)
+		logger.InfoContext(ctx, "worker processing archive",
+			slog.Int("worker_id", workerID),
+			slog.String("archive", name),
+		)
+
+		if err := processSingleArchive(ctx, archivePath, cfg, logger); err != nil {
+			errorCount.Add(1)
+			logger.ErrorContext(ctx, "failed processing archive",
+				slog.String("archive", name),
+				slog.Any("error", err),
+			)
+			continue
+		}
+
+		completedCount.Add(1)
+		logger.InfoContext(ctx, "successfully processed archive", slog.String("archive", name))
+	}
 }
 
 func processSingleArchive(ctx context.Context, archivePath string, cfg runnerConfig, _ *slog.Logger) error {
@@ -300,19 +311,25 @@ func waitForReady(ctx context.Context, url string, timeout time.Duration) error 
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url+"/health/ready", nil)
-		if err == nil {
-			resp, err := client.Do(req)
-			if err == nil {
-				_ = resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					return nil
-				}
-			}
+		if pingReady(ctx, client, url) {
+			return nil
 		}
 		time.Sleep(30 * time.Millisecond)
 	}
 	return fmt.Errorf("readiness timeout exceeded for %s", url)
+}
+
+func pingReady(ctx context.Context, client *http.Client, url string) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url+"/health/ready", nil)
+	if err != nil {
+		return false
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return resp.StatusCode == http.StatusOK
 }
 
 func getEnv(key, defaultVal string) string {
