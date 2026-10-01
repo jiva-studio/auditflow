@@ -91,17 +91,67 @@ func (f *SpatialFacet) SetLayer(displayID int, layer display.SpatialLayer) {
 
 // Apply updates spatial layers from domain events.
 func (f *SpatialFacet) Apply(event events.Event) {
-	if ev, ok := event.(events.OCREvent); ok {
-		frame := display.OCRFrame{
-			DisplayID:   ev.DisplayID,
-			Resolution:  ev.Resolution,
-			ScaleFactor: ev.ScaleFactor,
-			Blocks:      ev.Blocks,
-			Timestamp:   ev.Timestamp,
-			Filename:    ev.Filename,
-		}
-		f.SetLayer(ev.DisplayID, frame)
+	ev, ok := event.(events.OCREvent)
+	if !ok {
+		return
 	}
+
+	scale := ev.ScaleFactor
+	if scale <= 0 {
+		scale = 1.0
+	}
+	f.autoRegisterDisplay(ev, scale)
+
+	blocks := ev.Blocks
+	if len(blocks) == 0 && ev.DeduplicatedFrom != "" {
+		if prevLayer, has := f.layers[ev.DisplayID]; has {
+			if prevFrame, ok := prevLayer.(display.OCRFrame); ok {
+				blocks = prevFrame.Blocks
+			}
+		}
+	}
+
+	frame := display.OCRFrame{
+		DisplayID:   ev.DisplayID,
+		Resolution:  ev.Resolution,
+		ScaleFactor: scale,
+		Blocks:      blocks,
+		Timestamp:   ev.Timestamp,
+		Filename:    ev.Filename,
+	}
+	f.SetLayer(ev.DisplayID, frame)
+}
+
+func (f *SpatialFacet) autoRegisterDisplay(ev events.OCREvent, scale float64) {
+	if ev.Resolution.Width <= 0 || ev.Resolution.Height <= 0 {
+		return
+	}
+	if _, hasDisplay := f.displays[ev.DisplayID]; hasDisplay {
+		return
+	}
+
+	origX, origY := ev.WindowRect.X, ev.WindowRect.Y
+	if origX < 0 {
+		origX = 0
+	}
+	if origY < 0 {
+		origY = 0
+	}
+
+	displayBounds := geometry.Rectangle{
+		X:      origX,
+		Y:      origY,
+		Width:  ev.Resolution.Width,
+		Height: ev.Resolution.Height,
+	}
+	disp, err := display.NewDisplay(ev.DisplayID, displayBounds, scale, ev.DisplayID == 0)
+	if err != nil {
+		return
+	}
+	if f.displays == nil {
+		f.displays = make(map[int]display.Display)
+	}
+	f.displays[ev.DisplayID] = disp
 }
 
 // FindTextAt performs spatial hit-testing across registered displays and visual layers.

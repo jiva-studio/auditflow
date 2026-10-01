@@ -220,3 +220,19 @@ func TestRuleWithCustomSpecifications(t *testing.T) {
 		t.Fatalf("expected ErrEmptyRuleID, got %v", err)
 	}
 }
+
+func TestRule_RequiresClick(t *testing.T) {
+	clickPat, _ := NewPatternList("Done")
+	clipPat, _ := NewPatternList("INV-*")
+	tpl, _ := NewPopupTemplate("T", "B")
+
+	rClick, _ := NewRule("r-click", WhenConditions{Click: &clickPat}, tpl)
+	rClip, _ := NewRule("r-clip", WhenConditions{Clipboard: &clipPat}, tpl)
+
+	if !rClick.RequiresClick() {
+		t.Error("expected rClick.RequiresClick() to be true")
+	}
+	if rClip.RequiresClick() {
+		t.Error("expected rClip.RequiresClick() to be false")
+	}
+}

@@ -75,3 +75,13 @@ func (r Rule) populateDefaults(ctx RuleEvaluationContext, vars map[string]string
 		vars["process"] = ctx.Process
 	}
 }
+
+// RequiresClick returns true if any specification in the rule requires a click event.
+func (r Rule) RequiresClick() bool {
+	for _, spec := range r.Specs {
+		if spec.VariableKey() == "click" {
+			return true
+		}
+	}
+	return false
+}
