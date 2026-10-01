@@ -155,9 +155,9 @@ assessment/
 
 ---
 
-## 5. Continuous Integration & Delivery (CI/CD)
+## 5. Continuous Integration (CI)
 
-The automated [GitHub Actions CI/CD Pipeline](.github/workflows/ci.yml) enforces quality gates on every Pull Request and commit to `main`:
+The automated [GitHub Actions CI](.github/workflows/ci.yml) workflow enforces quality gates on every Pull Request and commit to `main`:
 
 * **Stage 1: Quality Gates & Fitness Functions**: Verifies code formatting with `gofmt`, executes Python AST domain purity guards (`no_json.py`, `no_io.py`), and runs `golangci-lint` across all Go modules.
 * **Stage 2: Unit & Integration Tests**: Runs test suites with Go race detector (`-race`) and generates aggregated coverage profiles.
