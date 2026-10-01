@@ -29,40 +29,65 @@ func NewPopupTemplate(title, body string) (PopupTemplate, error) {
 // using single-pass substitution to ensure deterministic output, prevent secondary expansion,
 // and strip any unresolved placeholders.
 func (t PopupTemplate) Render(vars map[string]string) (renderedTitle string, renderedBody string) {
-	return renderString(t.Title, vars), renderString(t.Body, vars)
+	return renderTemplate(t.Title, vars), renderTemplate(t.Body, vars)
 }
 
-func renderString(tmpl string, vars map[string]string) string {
+func renderTemplate(tmpl string, vars map[string]string) string {
+	if !strings.Contains(tmpl, "{") {
+		return tmpl
+	}
+
 	var sb strings.Builder
 	sb.Grow(len(tmpl))
-	for i := 0; i < len(tmpl); {
-		token, adv, ok := extractPlaceholder(tmpl[i:])
-		if ok {
-			if vars != nil {
-				if val, exists := vars[token]; exists {
-					sb.WriteString(val)
-				}
+
+	i := 0
+	for i < len(tmpl) {
+		start := strings.IndexByte(tmpl[i:], '{')
+		if start == -1 {
+			sb.WriteString(tmpl[i:])
+			break
+		}
+		start += i
+		sb.WriteString(tmpl[i:start])
+
+		end := strings.IndexByte(tmpl[start+1:], '}')
+		if end == -1 {
+			sb.WriteString(tmpl[start:])
+			break
+		}
+		end += start + 1
+
+		// If there is an inner '{' between start+1 and end, write the prefix as literal
+		if innerStart := strings.LastIndexByte(tmpl[start+1:end], '{'); innerStart != -1 {
+			actualStart := start + 1 + innerStart
+			sb.WriteString(tmpl[start:actualStart])
+			start = actualStart
+		}
+
+		token := tmpl[start+1 : end]
+		if vars != nil {
+			if val, ok := vars[token]; ok {
+				sb.WriteString(val)
+				i = end + 1
+				continue
 			}
-			i += adv
+		}
+
+		if token == "" {
+			sb.WriteString("{}")
+			i = end + 1
 			continue
 		}
-		sb.WriteByte(tmpl[i])
-		i++
-	}
-	return sb.String()
-}
 
-func extractPlaceholder(s string) (string, int, bool) {
-	if len(s) < 2 || s[0] != '{' {
-		return "", 0, false
+		if strings.ContainsAny(token, " \t\r\n") {
+			sb.WriteString(tmpl[start : end+1])
+			i = end + 1
+			continue
+		}
+
+		// Unresolved variable placeholder: cleanly strip
+		i = end + 1
 	}
-	closeIdx := strings.IndexByte(s, '}')
-	if closeIdx == -1 {
-		return "", 0, false
-	}
-	token := s[1:closeIdx]
-	if len(token) == 0 || strings.ContainsAny(token, "{} \t\r\n") {
-		return "", 0, false
-	}
-	return token, closeIdx + 1, true
+
+	return sb.String()
 }
