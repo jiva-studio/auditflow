@@ -58,7 +58,7 @@ curl -s "http://localhost:8080/audit?rule=forwarded-email-opened"
 
 ## 2. Local Development & Testing
 
-All local development targets are managed via the root [Makefile](file:///home/akd/Projects/assessment/Makefile):
+All local development targets are managed via the root [Makefile](Makefile):
 
 ```bash
 # Run all End-to-End integration tests (Streamer, Agent, and Central Server pipeline)
@@ -145,26 +145,19 @@ assessment/
 
 ---
 
-## 4. Architectural Decisions & Rationale
+## 4. Architectural Decisions
 
-Key technical and architectural decisions are formally documented in Architecture Decision Records (ADRs):
-
-1. **[ADR-0001: Clean & Hexagonal Architecture](file:///home/akd/Projects/assessment/docs/adr/0001-clean-and-hexagonal-architecture.md)**
-   * *Rationale*: Business logic is completely decoupled from transport protocols (HTTP/Protobuf) and persistence mechanisms. Adapters can be replaced or mocked without modifying domain logic.
-2. **[ADR-0002: Domain-Driven Design & Zero I/O in Domain](file:///home/akd/Projects/assessment/docs/adr/0002-domain-driven-design.md)**
-   * *Rationale*: Pure domain models with strict encapsulation, immutable value objects (`Point`, `Rectangle`, `Popup`), and explicit invariants. The domain package has zero external third-party dependencies and performs zero I/O operations.
-3. **[ADR-0003: Protobuf for Inter-Service Communication](file:///home/akd/Projects/assessment/docs/adr/0003-protobuf-for-inter-service-communication.md)**
-   * *Rationale*: Compact binary payload format reduces network serialization overhead and memory allocations by over 70% compared to JSON during high-frequency telemetry streaming.
-4. **[ADR-0004: Comprehensive Testing Strategy & Gremlins Mutation Testing](file:///home/akd/Projects/assessment/docs/adr/0004-testing-strategy-and-mutation-testing.md)**
-   * *Rationale*: Quality assurance built on a multi-layer test pyramid: unit tests for all domain invariants, integration tests with mocked transports, E2E tests over real recordings, stress tests with memory bounds (`GOMEMLIMIT`), and 100% mutation testing efficacy via Gremlins.
-5. **[ADR-0005: Automated Architectural Fitness Functions](file:///home/akd/Projects/assessment/docs/adr/0005-automated-architectural-fitness-functions.md)**
-   * *Rationale*: Automated AST guards run in pre-commit hooks to mathematically prevent architectural erosion (verifying AST nodes for forbidden imports like `os`, `net/http`, `io`, and struct tags like `json:`).
+1. **[ADR-0001: Clean & Hexagonal Architecture](docs/adr/0001-clean-and-hexagonal-architecture.md)** — Decouples pure domain logic from transports (HTTP/Protobuf) and storage, allowing adapters and databases to be swapped or mocked without touching business logic.
+2. **[ADR-0002: Domain-Driven Design & Zero I/O in Domain](docs/adr/0002-domain-driven-design.md)** — Enforces strict invariants and immutable value objects (`Point`, `Rectangle`, `Popup`) with zero external dependencies, zero JSON tags, and zero I/O in the domain.
+3. **[ADR-0003: Protobuf for Inter-Service Communication](docs/adr/0003-protobuf-for-inter-service-communication.md)** — Provides strongly-typed inter-service contracts and cuts network serialization overhead and allocations by >70% compared to JSON during high-frequency telemetry streaming.
+4. **[ADR-0004: Comprehensive Testing Strategy & Gremlins Mutation Testing](docs/adr/0004-testing-strategy-and-mutation-testing.md)** — Combines unit tests for domain invariants, black-box E2E tests over real recordings with bounded memory (`GOMEMLIMIT`), and Gremlins mutation testing to verify test effectiveness.
+5. **[ADR-0005: Automated Architectural Fitness Functions](docs/adr/0005-automated-architectural-fitness-functions.md)** — Automatically prevents architectural erosion via AST guards in pre-commit hooks and CI, prohibiting forbidden imports (`os`, `io`, `encoding/json`) in pure packages.
 
 ---
 
 ## 5. Continuous Integration & Delivery (CI/CD)
 
-The automated [GitHub Actions CI/CD Pipeline](file:///home/akd/Projects/assessment/.github/workflows/ci.yml) enforces quality gates on every Pull Request and commit to `main`:
+The automated [GitHub Actions CI/CD Pipeline](.github/workflows/ci.yml) enforces quality gates on every Pull Request and commit to `main`:
 
 * **Stage 1: Quality Gates & Fitness Functions**: Verifies code formatting with `gofmt`, executes Python AST domain purity guards (`no_json.py`, `no_io.py`), and runs `golangci-lint` across all Go modules.
 * **Stage 2: Unit & Integration Tests**: Runs test suites with Go race detector (`-race`) and generates aggregated coverage profiles.
