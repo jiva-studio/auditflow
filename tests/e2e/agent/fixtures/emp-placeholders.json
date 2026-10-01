@@ -1,0 +1,27 @@
+{
+  "employee_id": "emp-placeholders",
+  "total_popups": 3,
+  "popups": [
+    {
+      "employee": "emp-placeholders",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T12:00:01Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Unresolved Placeholder 👩‍💻 \u200B Report"
+    },
+    {
+      "employee": "emp-placeholders",
+      "rule": "jira-ticket-done",
+      "ts": "2026-03-10T12:00:03Z",
+      "title": "Ticket moved to Done",
+      "body": "DEV-909 - Jira - Mozilla Firefox \u202E"
+    },
+    {
+      "employee": "emp-placeholders",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T12:00:05Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-9999-RECURSIVE-{clipboard}{click}. Attach the invoice to this email?"
+    }
+  ]
+}

@@ -26,39 +26,42 @@ func NewPopupTemplate(title, body string) (PopupTemplate, error) {
 }
 
 // Render replaces placeholder variables like {click}, {window_title}, {clipboard}, {ocr} in title and body.
-// Any remaining unresolved placeholders of the form {placeholder_name} are stripped.
+// Any remaining unresolved placeholders of the form {placeholder_name} are cleanly stripped.
 func (t PopupTemplate) Render(vars map[string]string) (renderedTitle string, renderedBody string) {
-	renderedTitle = t.Title
-	renderedBody = t.Body
-
-	for key, val := range vars {
-		placeholder := "{" + key + "}"
-		renderedTitle = strings.ReplaceAll(renderedTitle, placeholder, val)
-		renderedBody = strings.ReplaceAll(renderedBody, placeholder, val)
-	}
-
-	renderedTitle = stripUnresolvedPlaceholders(renderedTitle)
-	renderedBody = stripUnresolvedPlaceholders(renderedBody)
-
-	return renderedTitle, renderedBody
+	return renderString(t.Title, vars), renderString(t.Body, vars)
 }
 
-func stripUnresolvedPlaceholders(s string) string {
+func renderString(tmpl string, vars map[string]string) string {
 	var sb strings.Builder
-	sb.Grow(len(s))
-	for i := 0; i < len(s); {
-		if s[i] == '{' {
-			closeIdx := strings.IndexByte(s[i:], '}')
-			if closeIdx != -1 {
-				token := s[i+1 : i+closeIdx]
-				if len(token) > 0 && !strings.ContainsAny(token, "{} \t\r\n") {
-					i += closeIdx + 1
-					continue
+	sb.Grow(len(tmpl))
+	for i := 0; i < len(tmpl); {
+		token, adv, ok := extractPlaceholder(tmpl[i:])
+		if ok {
+			if vars != nil {
+				if val, exists := vars[token]; exists {
+					sb.WriteString(val)
 				}
 			}
+			i += adv
+			continue
 		}
-		sb.WriteByte(s[i])
+		sb.WriteByte(tmpl[i])
 		i++
 	}
 	return sb.String()
+}
+
+func extractPlaceholder(s string) (string, int, bool) {
+	if len(s) < 2 || s[0] != '{' {
+		return "", 0, false
+	}
+	closeIdx := strings.IndexByte(s, '}')
+	if closeIdx == -1 {
+		return "", 0, false
+	}
+	token := s[1:closeIdx]
+	if len(token) == 0 || strings.ContainsAny(token, "{} \t\r\n") {
+		return "", 0, false
+	}
+	return token, closeIdx + 1, true
 }
