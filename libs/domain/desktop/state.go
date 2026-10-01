@@ -132,17 +132,9 @@ func (f *SpatialFacet) autoRegisterDisplay(ev events.OCREvent, scale float64) {
 		return
 	}
 
-	origX, origY := ev.WindowRect.X, ev.WindowRect.Y
-	if origX < 0 {
-		origX = 0
-	}
-	if origY < 0 {
-		origY = 0
-	}
-
 	displayBounds := geometry.Rectangle{
-		X:      origX,
-		Y:      origY,
+		X:      ev.WindowRect.X,
+		Y:      ev.WindowRect.Y,
 		Width:  ev.Resolution.Width,
 		Height: ev.Resolution.Height,
 	}
@@ -212,12 +204,8 @@ func (f *SpatialFacet) findInAllLayers(point geometry.Point) (string, bool) {
 	for _, displayID := range f.sortedLayerIDs() {
 		layer := f.layers[displayID]
 		d, hasDisplay := f.displays[displayID]
-		bounds := geometry.Rectangle{
-			X:      0,
-			Y:      0,
-			Width:  1920,
-			Height: 1080,
-		}
+
+		var bounds geometry.Rectangle
 		if hasDisplay {
 			bounds = d.Bounds
 		} else if frame, ok := layer.(display.OCRFrame); ok && frame.Resolution.Width > 0 && frame.Resolution.Height > 0 {
@@ -227,6 +215,8 @@ func (f *SpatialFacet) findInAllLayers(point geometry.Point) (string, bool) {
 				Width:  frame.Resolution.Width,
 				Height: frame.Resolution.Height,
 			}
+		} else {
+			continue
 		}
 
 		if hit, hitFound := layer.HitTest(point, bounds); hitFound {

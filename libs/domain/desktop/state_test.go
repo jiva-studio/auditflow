@@ -600,3 +600,81 @@ func TestDesktopState_DeterministicMultiLayerIteration(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopState_AutoRegisterDisplay_NegativeCoordinatesAndNonStandardResolutions(t *testing.T) {
+	// Create state without predefined displays (as occurs in the live Agent)
+	state := desktop.NewState()
+
+	// 1. Portrait secondary monitor with negative Y origin: [1954, -708], resolution 1080x1920
+	rectPort, _ := geometry.NewRectangle(1954, -708, 1080, 1920)
+	boxPort, _ := geometry.NewRectangle(100, 200, 300, 50)
+	state.Apply(events.OCREvent{
+		DisplayID:   1,
+		Resolution:  geometry.Size{Width: 1080, Height: 1920},
+		ScaleFactor: 1.0,
+		WindowRect:  rectPort,
+		Blocks:      []display.OCRTextBlock{{Text: "Portrait Header", Box: boxPort}},
+	})
+
+	// 2. 4K secondary monitor with negative Y origin: [3050, -706], resolution 3840x2160
+	rect4K, _ := geometry.NewRectangle(3050, -706, 3840, 2160)
+	box4K, _ := geometry.NewRectangle(200, 300, 500, 60)
+	state.Apply(events.OCREvent{
+		DisplayID:   2,
+		Resolution:  geometry.Size{Width: 3840, Height: 2160},
+		ScaleFactor: 1.5,
+		WindowRect:  rect4K,
+		Blocks:      []display.OCRTextBlock{{Text: "4K Invoice Details", Box: box4K}},
+	})
+
+	// Hit-test portrait monitor: global X = 1954 + 150 = 2104, Y = -708 + 220 = -488
+	textPort, hitPort := state.FindTextAt(geometry.Point{X: 2104, Y: -488})
+	if !hitPort || textPort != "Portrait Header" {
+		t.Errorf("portrait monitor hit failed: text=%q, hit=%v", textPort, hitPort)
+	}
+
+	// Hit-test 4K monitor: global X = 3050 + 300 = 3350, Y = -706 + 320 = -386
+	text4K, hit4K := state.FindTextAt(geometry.Point{X: 3350, Y: -386})
+	if !hit4K || text4K != "4K Invoice Details" {
+		t.Errorf("4K monitor hit failed: text=%q, hit=%v", text4K, hit4K)
+	}
+
+	// Miss on negative coordinates outside any block
+	_, hitMiss := state.FindTextAt(geometry.Point{X: 2000, Y: -100})
+	if hitMiss {
+		t.Errorf("expected miss on empty negative coordinates")
+	}
+}
+
+func TestDesktopState_FindInAllLayers_WithoutMagicResolution(t *testing.T) {
+	// State without configured displays or auto-registered displays
+	spatialFacet := desktop.NewSpatialFacet()
+
+	// 1. UltraWide OCR frame (3440x1440) registered as a layer directly
+	boxUW := geometry.Rectangle{X: 3000, Y: 1000, Width: 400, Height: 100}
+	spatialFacet.SetLayer(10, display.OCRFrame{
+		Resolution: geometry.Size{Width: 3440, Height: 1440},
+		Blocks:     []display.OCRTextBlock{{Text: "UltraWide Banner", Box: boxUW}},
+	})
+
+	// Point inside UltraWide frame at (3100, 1050) -> should hit without 1920x1080 cutoff
+	text, hit := spatialFacet.FindTextAt(geometry.Point{X: 3100, Y: 1050})
+	if !hit || text != "UltraWide Banner" {
+		t.Errorf("ultrawide hit-test failed: text=%q, hit=%v", text, hit)
+	}
+
+	// Point outside UltraWide bounds at (3500, 1050) -> should miss
+	_, miss := spatialFacet.FindTextAt(geometry.Point{X: 3500, Y: 1050})
+	if miss {
+		t.Errorf("expected miss for point outside UltraWide resolution")
+	}
+
+	// 2. Layer with zero resolution -> should safely return false without crashing
+	spatialFacet.SetLayer(11, display.OCRFrame{
+		Resolution: geometry.Size{Width: 0, Height: 0},
+		Blocks:     []display.OCRTextBlock{{Text: "Zero Res", Box: geometry.Rectangle{X: 0, Y: 0, Width: 10, Height: 10}}},
+	})
+	if _, hitZero := spatialFacet.FindTextAt(geometry.Point{X: 5, Y: 5}); hitZero {
+		t.Errorf("expected false for zero resolution layer without display")
+	}
+}
