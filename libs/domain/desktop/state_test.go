@@ -558,3 +558,45 @@ func TestDesktopState_FacetsDirectAccess(t *testing.T) {
 		t.Errorf("custom layer hit-test failed: %q, %v", text, hit)
 	}
 }
+
+func TestDesktopState_DeterministicMultiLayerIteration(t *testing.T) {
+	// Create state with multiple displays and overlapping layer rectangles without displays configured
+	spatialFacet := desktop.NewSpatialFacet()
+
+	// Register multiple layers (ID 1, 2, 3) with overlapping bounding boxes
+	box := geometry.Rectangle{X: 0, Y: 0, Width: 100, Height: 100}
+	spatialFacet.SetLayer(3, display.OCRFrame{
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks:     []display.OCRTextBlock{{Text: "Layer 3 Text", Box: box}},
+	})
+	spatialFacet.SetLayer(1, display.OCRFrame{
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks:     []display.OCRTextBlock{{Text: "Layer 1 Text", Box: box}},
+	})
+	spatialFacet.SetLayer(2, display.OCRFrame{
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks:     []display.OCRTextBlock{{Text: "Layer 2 Text", Box: box}},
+	})
+
+	// Run multiple times to verify deterministic hit-testing order (should consistently hit Layer 1 first)
+	for i := 0; i < 50; i++ {
+		text, hit := spatialFacet.FindTextAt(geometry.Point{X: 50, Y: 50})
+		if !hit {
+			t.Fatalf("iteration %d: expected hit", i)
+		}
+		if text != "Layer 1 Text" {
+			t.Fatalf("iteration %d: expected deterministic hit 'Layer 1 Text', got %q", i, text)
+		}
+	}
+
+	// Verify AllTexts deterministic order: [Layer 1, Layer 2, Layer 3]
+	for i := 0; i < 50; i++ {
+		texts := spatialFacet.AllTexts()
+		if len(texts) != 3 {
+			t.Fatalf("iteration %d: expected 3 texts, got %d", i, len(texts))
+		}
+		if texts[0] != "Layer 1 Text" || texts[1] != "Layer 2 Text" || texts[2] != "Layer 3 Text" {
+			t.Fatalf("iteration %d: expected [Layer 1 Text, Layer 2 Text, Layer 3 Text], got %v", i, texts)
+		}
+	}
+}

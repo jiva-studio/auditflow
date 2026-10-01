@@ -2,6 +2,8 @@
 package desktop
 
 import (
+	"sort"
+
 	"assessment/libs/domain/display"
 	"assessment/libs/domain/events"
 	"assessment/libs/domain/geometry"
@@ -178,8 +180,27 @@ func (f *SpatialFacet) FindTextAt(point geometry.Point) (string, bool) {
 	return hit.Text, true
 }
 
+func (f *SpatialFacet) sortedDisplayIDs() []int {
+	ids := make([]int, 0, len(f.displays))
+	for id := range f.displays {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	return ids
+}
+
+func (f *SpatialFacet) sortedLayerIDs() []int {
+	ids := make([]int, 0, len(f.layers))
+	for id := range f.layers {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	return ids
+}
+
 func (f *SpatialFacet) findDisplayForPoint(point geometry.Point) (display.Display, bool) {
-	for _, d := range f.displays {
+	for _, id := range f.sortedDisplayIDs() {
+		d := f.displays[id]
 		if d.Contains(point) {
 			return d, true
 		}
@@ -188,7 +209,8 @@ func (f *SpatialFacet) findDisplayForPoint(point geometry.Point) (display.Displa
 }
 
 func (f *SpatialFacet) findInAllLayers(point geometry.Point) (string, bool) {
-	for displayID, layer := range f.layers {
+	for _, displayID := range f.sortedLayerIDs() {
+		layer := f.layers[displayID]
 		d, hasDisplay := f.displays[displayID]
 		bounds := geometry.Rectangle{
 			X:      0,
@@ -214,11 +236,11 @@ func (f *SpatialFacet) findInAllLayers(point geometry.Point) (string, bool) {
 	return "", false
 }
 
-// AllTexts returns all visible text strings from all spatial layers.
+// AllTexts returns all visible text strings from all spatial layers in deterministic order.
 func (f *SpatialFacet) AllTexts() []string {
 	var texts []string
-	for _, layer := range f.layers {
-		texts = append(texts, layer.AllTexts()...)
+	for _, id := range f.sortedLayerIDs() {
+		texts = append(texts, f.layers[id].AllTexts()...)
 	}
 	return texts
 }
