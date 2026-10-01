@@ -4,15 +4,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"assessment/tests/e2e/testutil"
 )
 
 type GoldenFixture struct {
@@ -20,24 +18,6 @@ type GoldenFixture struct {
 	StreamSHA256    string `json:"stream_sha256"`
 	FirstTickSHA256 string `json:"first_tick_sha256"`
 	LastTickSHA256  string `json:"last_tick_sha256"`
-}
-
-func findProjectRoot(t *testing.T) string {
-	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get current working directory: %v", err)
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("project root not found (.git missing in parent hierarchy)")
-		}
-		dir = parent
-	}
 }
 
 func loadFixture(t *testing.T, fixtureName string) GoldenFixture {
@@ -54,17 +34,8 @@ func loadFixture(t *testing.T, fixtureName string) GoldenFixture {
 }
 
 func TestStreamer_E2E(t *testing.T) {
-	root := findProjectRoot(t)
-
-	binPath := os.Getenv("STREAMER_BIN")
-	if binPath == "" {
-		binPath = filepath.Join(root, "bin", "streamer")
-	}
-
-	dataDir := os.Getenv("DATA_DIR")
-	if dataDir == "" {
-		dataDir = filepath.Join(root, "data")
-	}
+	binPath := testutil.GetStreamerBin(t)
+	dataDir := testutil.GetDataDir(t)
 
 	tests := []string{"emp-1", "emp-2", "emp-3"}
 
@@ -78,19 +49,7 @@ func TestStreamer_E2E(t *testing.T) {
 			var firstBody, lastBody []byte
 			hasher := sha256.New()
 
-			// Pure Black-Box Receiver: collects raw payload and counts requests
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodPost || r.Header.Get("Content-Type") != "application/x-protobuf" {
-					http.Error(w, "invalid request", http.StatusBadRequest)
-					return
-				}
-
-				body, err := io.ReadAll(r.Body)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-
+			server := testutil.NewMockAgentServer(t, func(body []byte) {
 				mu.Lock()
 				if totalTicks.Load() == 0 {
 					firstBody = body
@@ -98,24 +57,14 @@ func TestStreamer_E2E(t *testing.T) {
 				lastBody = body
 				hasher.Write(body)
 				mu.Unlock()
-
 				totalTicks.Add(1)
-				w.WriteHeader(http.StatusOK)
-			}))
+			})
 			defer server.Close()
 
 			archivePath := filepath.Join(dataDir, name+".tar.gz")
-
-			// Execute streamer binary
-			cmd := exec.Command(binPath)
-			cmd.Env = append(os.Environ(),
-				"RECORDING_PATH="+archivePath,
-				"AGENT_URL="+server.URL,
-				"TICK_MS=0",
-			)
-			output, err := cmd.CombinedOutput()
+			output, err := testutil.RunStreamer(t, binPath, archivePath, server.URL)
 			if err != nil {
-				t.Fatalf("streamer execution failed (exit code non-zero): %v\noutput: %s", err, output)
+				t.Fatalf("streamer execution failed: %v\noutput: %s", err, output)
 			}
 
 			// 1. Validate total ticks received
