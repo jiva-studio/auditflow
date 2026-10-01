@@ -88,7 +88,7 @@ func findProjectRoot(t *testing.T) string {
 }
 
 func TestRun_GracefulShutdown(t *testing.T) {
-	realRulesPath := filepath.Join(findProjectRoot(t), "data", "rules.json")
+	realRulesPath := filepath.Join(findProjectRoot(t), "rules.json")
 	if _, err := os.Stat(realRulesPath); os.IsNotExist(err) {
 		t.Skip("rules.json not found, skipping run test")
 	}

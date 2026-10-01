@@ -19,7 +19,7 @@ func (errReader) Read(_ []byte) (n int, err error) {
 
 func loadProjectRules(t *testing.T) map[string]domain.Rule {
 	t.Helper()
-	repoRoot := filepath.Join("..", "..", "..", "data", "rules.json")
+	repoRoot := filepath.Join("..", "..", "..", "rules.json")
 	ruleList, err := LoadRulesFromFile(repoRoot)
 	if err != nil {
 		t.Fatalf("failed to load rules.json: %v", err)

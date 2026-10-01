@@ -75,6 +75,9 @@ jobs:
           - name: apps/streamer
             path: modules/apps/streamer
             id: apps-streamer
+          - name: apps/runner
+            path: modules/apps/runner
+            id: apps-runner
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -119,6 +122,8 @@ jobs:
             path: modules/apps/server
           - name: apps/streamer
             path: modules/apps/streamer
+          - name: apps/runner
+            path: modules/apps/runner
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -188,6 +193,7 @@ jobs:
             bin/server
             bin/agent
             bin/streamer
+            bin/runner
           retention-days: 14
 
   # ----------------------------------------------------------------------------
@@ -202,7 +208,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        service: [server, agent, streamer]
+        service: [server, agent, streamer, runner]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
