@@ -344,3 +344,88 @@ func GenerateTemplatePlaceholderRecording(t *testing.T, targetPath string, emplo
 	}
 	return fi.Size(), nil
 }
+
+// GenerateClickProcessContextRecording creates a synthetic recording archive that tests
+// click evaluation using process and window title context directly from mouse events.
+func GenerateClickProcessContextRecording(t *testing.T, targetPath, employeeID string) (int64, error) {
+	t.Helper()
+
+	f, err := os.Create(targetPath)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	gzw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gzw)
+
+	startTime := time.Date(2026, 3, 10, 10, 0, 0, 0, time.UTC)
+	endTime := startTime.Add(2 * time.Second)
+
+	metaJSON := fmt.Sprintf(`{
+		"schema_version": "1.0.0",
+		"session_id": "sess-e2e-click-context",
+		"employee_id": "%s",
+		"started_at": "%s",
+		"ended_at": "%s",
+		"machine": {
+			"hostname": "CLICK-CONTEXT-HOST",
+			"os_version": "Linux 6.6",
+			"displays": [
+				{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0, "primary": true}
+			]
+		}
+	}`, employeeID, startTime.Format(time.RFC3339Nano), endTime.Format(time.RFC3339Nano))
+
+	if err := writeTarEntry(tw, "session/metadata.json", []byte(metaJSON)); err != nil {
+		return 0, err
+	}
+
+	windowsData := fmt.Sprintf(
+		`{"ts":"%s","event":"focus_change","window_title":"Background Explorer","process_name":"explorer.exe","window_rect":[0,0,1920,1080]}`+"\n",
+		startTime.Add(100*time.Millisecond).Format(time.RFC3339Nano),
+	)
+	if err := writeTarEntry(tw, "session/windows.jsonl", []byte(windowsData)); err != nil {
+		return 0, err
+	}
+
+	ocrData := fmt.Sprintf(
+		`{"ts":"%s","filename":"frame1.jpg","display_id":0,"resolution":[1920,1080],"ocr_text_blocks":[{"text":"FW: Q3 Audit Report","bounding_box":[100,100,250,30],"confidence":0.99},{"text":"Done","bounding_box":[400,200,100,30],"confidence":0.99}]}`+"\n",
+		startTime.Add(200*time.Millisecond).Format(time.RFC3339Nano),
+	)
+	if err := writeTarEntry(tw, "session/ocr.jsonl", []byte(ocrData)); err != nil {
+		return 0, err
+	}
+
+	mouseData := fmt.Sprintf(
+		`{"ts":"%s","event":"click","button":"left","mouse_x":150,"mouse_y":110,"click_count":"1","process_name":"OUTLOOK.EXE","window_title":"Inbox - Outlook"}`+"\n"+
+			`{"ts":"%s","event":"click","button":"left","mouse_x":420,"mouse_y":210,"click_count":"1","process_name":"chrome.exe","window_title":"PROJ-101 - Jira - Dashboard"}`+"\n",
+		startTime.Add(500*time.Millisecond).Format(time.RFC3339Nano),
+		startTime.Add(1500*time.Millisecond).Format(time.RFC3339Nano),
+	)
+	if err := writeTarEntry(tw, "session/mouse.jsonl", []byte(mouseData)); err != nil {
+		return 0, err
+	}
+
+	if err := writeTarEntry(tw, "session/clipboard.jsonl", []byte{}); err != nil {
+		return 0, err
+	}
+	if err := writeTarEntry(tw, "session/keyboard.jsonl", []byte{}); err != nil {
+		return 0, err
+	}
+
+	if err := tw.Close(); err != nil {
+		return 0, err
+	}
+	if err := gzw.Close(); err != nil {
+		return 0, err
+	}
+
+	fi, err := f.Stat()
+	if err != nil {
+		return 0, err
+	}
+	return fi.Size(), nil
+}

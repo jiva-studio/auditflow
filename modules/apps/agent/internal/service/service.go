@@ -99,6 +99,8 @@ func (s *Service) processEvent(ctx context.Context, ev events.Event) error {
 	}
 }
 
+const chromeLegacyWindow = "Chrome Legacy Window"
+
 func (s *Service) handleMouseEvent(ctx context.Context, m events.MouseEvent) error {
 	if !isClickEvent(m) {
 		return nil
@@ -106,6 +108,14 @@ func (s *Service) handleMouseEvent(ctx context.Context, m events.MouseEvent) err
 
 	clickText, _ := s.state.FindTextAt(m.Position)
 	evalCtx := s.state.BuildEvaluationContext(clickText)
+	// Chromium child HWNDs report an internal placeholder title ("Chrome Legacy Window")
+	// rather than the true top-level application window title.
+	if m.ProcessName != "" && m.WindowTitle != chromeLegacyWindow {
+		evalCtx.Process = m.ProcessName
+	}
+	if m.WindowTitle != "" && m.WindowTitle != chromeLegacyWindow {
+		evalCtx.WindowTitle = m.WindowTitle
+	}
 	return s.evaluateRulesAndDispatch(ctx, evalCtx, m.Timestamp, true)
 }
 

@@ -521,6 +521,84 @@ func generateLeftHandArchive(targetPath string) error {
 	return gzw.Close()
 }
 
+func generateClickProcessArchive(targetPath string) error {
+	f, err := os.Create(targetPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	gzw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gzw)
+
+	startTime := time.Date(2026, 3, 10, 10, 0, 0, 0, time.UTC)
+	endTime := startTime.Add(5 * time.Second)
+
+	metaJSON := fmt.Sprintf(`{
+		"schema_version": "1.0.0",
+		"session_id": "sess-clickprocess-scenarios",
+		"employee_id": "emp-clickprocess",
+		"started_at": "%s",
+		"ended_at": "%s",
+		"machine": {
+			"hostname": "CLICKPROCESS-DESKTOP",
+			"os_version": "Windows 11 Enterprise",
+			"displays": [
+				{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0, "primary": true}
+			]
+		}
+	}`, startTime.Format(time.RFC3339Nano), endTime.Format(time.RFC3339Nano))
+
+	if err := writeTarFile(tw, "session/metadata.json", []byte(metaJSON)); err != nil {
+		return err
+	}
+
+	// Second 1: Mouse click in Outlook over "FW: Priority Customer Escalation" while focused window is Chrome
+	ts1_ocr := startTime.Add(1*time.Second + 100*time.Millisecond).Format(time.RFC3339Nano)
+	ts1_win := startTime.Add(1*time.Second + 200*time.Millisecond).Format(time.RFC3339Nano)
+	ts1_click := startTime.Add(1*time.Second + 300*time.Millisecond).Format(time.RFC3339Nano)
+	ocr1 := fmt.Sprintf(`{"ts":"%s","filename":"s1.jpg","display_id":0,"resolution":[1920,1080],"ocr_text_blocks":[{"text":"FW: Priority Customer Escalation","bounding_box":[100,200,350,40],"confidence":1.0}]}`+"\n", ts1_ocr)
+	win1 := fmt.Sprintf(`{"ts":"%s","event":"focus_change","window_title":"Google Chrome","process_name":"chrome.exe","window_rect":[0,0,1920,1080]}`+"\n", ts1_win)
+	mouse1 := fmt.Sprintf(`{"ts":"%s","event":"click","button":"left","mouse_x":150,"mouse_y":220,"click_count":"single","process_name":"OUTLOOK.EXE","window_title":"Inbox - Outlook"}`+"\n", ts1_click)
+
+	// Second 2: Mouse click in Jira over "Done" while focused window is Notepad
+	ts2_ocr := startTime.Add(2*time.Second + 100*time.Millisecond).Format(time.RFC3339Nano)
+	ts2_win := startTime.Add(2*time.Second + 200*time.Millisecond).Format(time.RFC3339Nano)
+	ts2_click := startTime.Add(2*time.Second + 300*time.Millisecond).Format(time.RFC3339Nano)
+	ocr2 := fmt.Sprintf(`{"ts":"%s","filename":"s2.jpg","display_id":0,"resolution":[1920,1080],"ocr_text_blocks":[{"text":"Done","bounding_box":[200,200,100,30],"confidence":1.0}]}`+"\n", ts2_ocr)
+	win2 := fmt.Sprintf(`{"ts":"%s","event":"focus_change","window_title":"Untitled - Notepad","process_name":"notepad.exe","window_rect":[0,0,1920,1080]}`+"\n", ts2_win)
+	mouse2 := fmt.Sprintf(`{"ts":"%s","event":"click","button":"left","mouse_x":220,"mouse_y":210,"click_count":"single","process_name":"chrome.exe","window_title":"PROJ-555 - Jira - Sprint Board"}`+"\n", ts2_click)
+
+	// Second 3: Clipboard event in Outlook
+	ts3_win := startTime.Add(3*time.Second + 100*time.Millisecond).Format(time.RFC3339Nano)
+	ts3_clip := startTime.Add(3*time.Second + 200*time.Millisecond).Format(time.RFC3339Nano)
+	win3 := fmt.Sprintf(`{"ts":"%s","event":"focus_change","window_title":"Inbox - Outlook","process_name":"OUTLOOK.EXE","window_rect":[0,0,1920,1080]}`+"\n", ts3_win)
+	clip3 := fmt.Sprintf(`{"ts":"%s","event":"clipboard_change","clipboard_content_text":"INV-998877","clipboard_content_length":10}`+"\n", ts3_clip)
+
+	ocrContent = ocr1 + ocr2
+	winContent = win1 + win2 + win3
+	mouseContent = mouse1 + mouse2
+	clipContent = clip3
+
+	if err := writeTarFile(tw, "session/ocr.jsonl", []byte(ocrContent)); err != nil {
+		return err
+	}
+	if err := writeTarFile(tw, "session/windows.jsonl", []byte(winContent)); err != nil {
+		return err
+	}
+	if err := writeTarFile(tw, "session/mouse.jsonl", []byte(mouseContent)); err != nil {
+		return err
+	}
+	if err := writeTarFile(tw, "session/clipboard.jsonl", []byte(clipContent)); err != nil {
+		return err
+	}
+
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	return gzw.Close()
+}
+
 func main() {
 	rootDir := "data"
 	if err := os.MkdirAll(rootDir, 0755); err != nil {
@@ -556,4 +634,10 @@ func main() {
 		log.Fatalf("failed to generate lefthand archive: %v", err)
 	}
 	log.Printf("Generated %s successfully", leftPath)
+
+	clickProcessPath := filepath.Join(rootDir, "emp-clickprocess.tar.gz")
+	if err := generateClickProcessArchive(clickProcessPath); err != nil {
+		log.Fatalf("failed to generate clickprocess archive: %v", err)
+	}
+	log.Printf("Generated %s successfully", clickProcessPath)
 }
