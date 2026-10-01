@@ -7,6 +7,7 @@ MUTATE_CMD ?= go run github.com/go-gremlins/gremlins/cmd/gremlins@latest unleash
 .PHONY: fmt \
         domain_guard domain_test domain_lint domain_mutate \
         protocol_gen protocol_test protocol_lint \
+        rules_test rules_lint rules_mutate \
         agent_test agent_lint agent_mutate \
         server_test server_lint server_mutate \
         streamer_test streamer_lint streamer_mutate \
@@ -44,6 +45,20 @@ protocol_test:
 
 protocol_lint:
 	cd libs/protocol && golangci-lint run ./...
+
+# ==============================================================================
+# LIBS / RULES
+# ==============================================================================
+
+rules_test:
+	cd libs/rules && go test -count=1 ./...
+
+rules_lint:
+	cd libs/rules && golangci-lint run ./...
+
+rules_mutate:
+	cd libs/rules && $(MUTATE_CMD)
+
 
 # ==============================================================================
 # MODULES / AGENT
