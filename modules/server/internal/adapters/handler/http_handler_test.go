@@ -191,6 +191,27 @@ func TestHTTPHandler_RecordPopup_Errors(t *testing.T) {
 	}
 }
 
+func TestHTTPHandler_RecordPopup_MaxBytesProtection(t *testing.T) {
+	svc := &mockServerService{}
+	h, _ := handler.NewHTTPHandler(svc)
+
+	hugePopup := mapper.PopupDTO{
+		Employee: "emp-1",
+		Rule:     "rule-1",
+		TS:       "2026-03-10T12:00:00Z",
+		Title:    "Title",
+		Body:     string(bytes.Repeat([]byte("x"), 5*1024*1024)),
+	}
+	hugeBytes, _ := json.Marshal(hugePopup)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/audit", bytes.NewReader(hugeBytes))
+	req.Header.Set("Content-Type", "application/json")
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on oversized request body, got %d", rec.Code)
+	}
+}
+
 func TestHTTPHandler_QueryPopups_JSON(t *testing.T) {
 	p1, _ := audit.NewPopup("emp-1", "rule-1", "2026-03-10T12:00:00Z", "Title 1", "Body 1")
 	svc := &mockServerService{

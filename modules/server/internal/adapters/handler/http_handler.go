@@ -16,6 +16,8 @@ import (
 	"assessment/modules/server/internal/ports"
 )
 
+const maxPopupPayloadSize = 4 * 1024 * 1024 // 4 MB
+
 // Sentinel errors for HTTPHandler.
 var (
 	ErrNilServerService = errors.New("server service is required")
@@ -73,7 +75,8 @@ func (h *HTTPHandler) handleAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPHandler) handleRecordPopup(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
+	bodyReader := http.MaxBytesReader(w, r.Body, maxPopupPayloadSize)
+	body, err := io.ReadAll(bodyReader)
 	if err != nil {
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
 		return
