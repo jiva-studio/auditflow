@@ -104,14 +104,7 @@ func (f *SpatialFacet) Apply(event events.Event) {
 	}
 	f.autoRegisterDisplay(ev, scale)
 
-	blocks := ev.Blocks
-	if len(blocks) == 0 && ev.DeduplicatedFrom != "" {
-		if prevLayer, has := f.layers[ev.DisplayID]; has {
-			if prevFrame, ok := prevLayer.(display.OCRFrame); ok {
-				blocks = prevFrame.Blocks
-			}
-		}
-	}
+	blocks := f.resolveOCRBlocks(ev)
 
 	frame := display.OCRFrame{
 		DisplayID:   ev.DisplayID,
@@ -122,6 +115,21 @@ func (f *SpatialFacet) Apply(event events.Event) {
 		Filename:    ev.Filename,
 	}
 	f.SetLayer(ev.DisplayID, frame)
+}
+
+func (f *SpatialFacet) resolveOCRBlocks(ev events.OCREvent) []display.OCRTextBlock {
+	if len(ev.Blocks) > 0 || ev.DeduplicatedFrom == "" {
+		return ev.Blocks
+	}
+	prevLayer, has := f.layers[ev.DisplayID]
+	if !has {
+		return nil
+	}
+	prevFrame, ok := prevLayer.(display.OCRFrame)
+	if !ok {
+		return nil
+	}
+	return prevFrame.Blocks
 }
 
 func (f *SpatialFacet) autoRegisterDisplay(ev events.OCREvent, scale float64) {

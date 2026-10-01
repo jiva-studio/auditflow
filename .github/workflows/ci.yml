@@ -134,7 +134,8 @@ jobs:
 
       - name: Run golangci-lint
         run: |
-          cd ${{ matrix.path }} && golangci-lint run ./...
+          ROOT_DIR=$(pwd)
+          cd ${{ matrix.path }} && golangci-lint run --config "$ROOT_DIR/.golangci.yml" ./...
 
   # ----------------------------------------------------------------------------
   # 4. PARALLEL E2E TESTS MATRIX
