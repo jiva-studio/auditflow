@@ -33,27 +33,30 @@ if [ -n "$GO_FILES" ]; then
 fi
 
 # 3. Targeted module checks
-if echo "$STAGED_FILES" | grep -q -E '^(libs/domain/|scripts/guards/domain/)'; then
-  echo "🔍 [pre-commit] Checking libs/domain..."
-  run_in_env "make domain_guard domain_test domain_lint"
-fi
+TARGET_MAP=(
+  "libs/domain/:make domain_guard domain_test domain_lint"
+  "scripts/guards/domain/:make domain_guard domain_test domain_lint"
+  "libs/protocol/:make protocol_test protocol_lint"
+  "modules/agent/:make agent_test agent_lint"
+  "scripts/guards/agent/:make agent_test agent_lint"
+  "modules/server/:make server_test server_lint"
+  "scripts/guards/server/:make server_test server_lint"
+  "modules/streamer/:make streamer_test streamer_lint"
+  "scripts/guards/streamer/:make streamer_test streamer_lint"
+  "tests/e2e/:make e2e_test"
+)
 
-if echo "$STAGED_FILES" | grep -q -E '^(modules/agent/|scripts/guards/agent/)'; then
-  echo "🔍 [pre-commit] Checking modules/agent..."
-  run_in_env "make agent_test agent_lint"
-fi
+EXECUTED_COMMANDS=()
 
-if echo "$STAGED_FILES" | grep -q -E '^(modules/server/|scripts/guards/server/)'; then
-  echo "🔍 [pre-commit] Checking modules/server..."
-  run_in_env "make server_test server_lint"
-fi
+for entry in "${TARGET_MAP[@]}"; do
+  pattern="${entry%%:*}"
+  cmd="${entry#*:}"
 
-if echo "$STAGED_FILES" | grep -q -E '^(modules/streamer/|scripts/guards/streamer/)'; then
-  echo "🔍 [pre-commit] Checking modules/streamer..."
-  run_in_env "make streamer_test streamer_lint"
-fi
-
-if echo "$STAGED_FILES" | grep -q '^tests/e2e/'; then
-  echo "🔍 [pre-commit] Checking tests/e2e..."
-  run_in_env "make e2e_test"
-fi
+  if echo "$STAGED_FILES" | grep -q "^$pattern"; then
+    if [[ ! " ${EXECUTED_COMMANDS[*]} " =~ " ${cmd} " ]]; then
+      EXECUTED_COMMANDS+=("$cmd")
+      echo "🔍 [pre-commit] Checking $pattern..."
+      run_in_env "$cmd"
+    fi
+  fi
+done
