@@ -64,12 +64,12 @@ func TestStreamer_E2E_Stress_MemoryBounded(t *testing.T) {
 		"GOMEMLIMIT="+memLimit,
 	)
 
-	tracker := testutil.StartMemoryTracker(cmd)
-	streamStart := time.Now()
-
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("failed to start streamer process: %v", err)
 	}
+
+	tracker := testutil.StartMemoryTracker(cmd)
+	streamStart := time.Now()
 
 	err = cmd.Wait()
 	streamDuration := time.Since(streamStart)

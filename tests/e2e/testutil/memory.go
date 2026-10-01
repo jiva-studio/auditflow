@@ -17,17 +17,20 @@ import (
 type MemoryTracker struct {
 	cmd            *exec.Cmd
 	stopCh         chan struct{}
+	doneCh         chan struct{}
 	maxPolledBytes atomic.Uint64
 }
 
-// StartMemoryTracker creates and launches live memory tracking for cmd
+// StartMemoryTracker creates and launches live memory tracking for cmd.
 func StartMemoryTracker(cmd *exec.Cmd) *MemoryTracker {
 	mt := &MemoryTracker{
 		cmd:    cmd,
 		stopCh: make(chan struct{}),
+		doneCh: make(chan struct{}),
 	}
 
 	go func() {
+		defer close(mt.doneCh)
 		ticker := time.NewTicker(2 * time.Millisecond)
 		defer ticker.Stop()
 		for {
@@ -35,11 +38,11 @@ func StartMemoryTracker(cmd *exec.Cmd) *MemoryTracker {
 			case <-mt.stopCh:
 				return
 			case <-ticker.C:
-				if cmd.Process == nil {
+				if cmd == nil || cmd.Process == nil || cmd.Process.Pid <= 0 {
 					continue
 				}
 				rss, err := readProcessRSSBytes(cmd.Process.Pid)
-				if err == nil {
+				if err == nil && rss > 0 {
 					for {
 						curr := mt.maxPolledBytes.Load()
 						if rss <= curr || mt.maxPolledBytes.CompareAndSwap(curr, rss) {
@@ -57,6 +60,7 @@ func StartMemoryTracker(cmd *exec.Cmd) *MemoryTracker {
 // Stop terminates the tracker and returns peak RSS in megabytes
 func (mt *MemoryTracker) Stop() float64 {
 	close(mt.stopCh)
+	<-mt.doneCh
 
 	polledBytes := mt.maxPolledBytes.Load()
 	if polledBytes > 0 {
@@ -64,15 +68,13 @@ func (mt *MemoryTracker) Stop() float64 {
 	}
 
 	// Fallback to syscall.Rusage from OS process state
-	if mt.cmd.ProcessState != nil {
-		if sysUsage := mt.cmd.ProcessState.SysUsage(); sysUsage != nil {
-			if rusage, ok := sysUsage.(*syscall.Rusage); ok {
-				if runtime.GOOS == "darwin" {
-					return float64(rusage.Maxrss) / (1024 * 1024)
-				}
-				// Linux / Unix Maxrss is in KB
-				return float64(rusage.Maxrss) / 1024
+	if mt.cmd != nil && mt.cmd.ProcessState != nil {
+		if rusage, ok := mt.cmd.ProcessState.SysUsage().(*syscall.Rusage); ok && rusage != nil {
+			if runtime.GOOS == "darwin" {
+				return float64(rusage.Maxrss) / (1024 * 1024)
 			}
+			// Linux / Unix Maxrss is in KB
+			return float64(rusage.Maxrss) / 1024
 		}
 	}
 	return 0
