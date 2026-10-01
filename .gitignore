@@ -9,6 +9,4 @@ bin/
 .idea/
 .vscode/
 
-# Ignore all data files completely
-data/*
-!data/.gitkeep
+

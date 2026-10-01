@@ -88,5 +88,8 @@ streamer_mutate:
 # TESTS / E2E
 # ==============================================================================
 
-e2e_test:
-	cd tests/e2e && go test -count=1 ./...
+streamer_e2e_test:
+	$(MAKE) -C tests/e2e/streamer test
+
+e2e_test: streamer_e2e_test
+
