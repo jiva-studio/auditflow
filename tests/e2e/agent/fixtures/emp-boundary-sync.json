@@ -1,0 +1,41 @@
+{
+  "employee_id": "emp-boundary-sync",
+  "total_popups": 5,
+  "popups": [
+    {
+      "employee": "emp-boundary-sync",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T10:00:00Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Pre-roll Invoice Review"
+    },
+    {
+      "employee": "emp-boundary-sync",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T10:00:01Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-554433. Attach the invoice to this email?"
+    },
+    {
+      "employee": "emp-boundary-sync",
+      "rule": "jira-ticket-done",
+      "ts": "2026-03-10T10:00:02Z",
+      "title": "Ticket moved to Done",
+      "body": "DEV-1234 - Jira - Chrome"
+    },
+    {
+      "employee": "emp-boundary-sync",
+      "rule": "salesforce-record-deleted",
+      "ts": "2026-03-10T10:00:03Z",
+      "title": "Record deleted",
+      "body": "Deleted in Salesforce: 0098765 | Case | Salesforce - Chrome"
+    },
+    {
+      "employee": "emp-boundary-sync",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T10:00:05Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-990011. Attach the invoice to this email?"
+    }
+  ]
+}

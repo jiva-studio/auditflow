@@ -10,47 +10,90 @@ import (
 	v1 "assessment/modules/libs/protocol/gen/go/v1"
 )
 
-func TestToDomainTickBatch(t *testing.T) {
-	t.Run("nil tick batch", func(t *testing.T) {
-		b := ToDomainTickBatch(nil)
-		if b.Len() != 0 {
-			t.Errorf("expected empty batch, got len=%d", b.Len())
-		}
-	})
+func TestToDomainTickBatch_Nil(t *testing.T) {
+	b := ToDomainTickBatch(nil)
+	if b.Len() != 0 {
+		t.Errorf("expected empty batch, got len=%d", b.Len())
+	}
+}
 
-	t.Run("valid tick batch", func(t *testing.T) {
-		now := time.Now().UTC().Truncate(time.Millisecond)
-		pb := &v1.TickBatch{
-			TickIndex: 5,
-			StartTime: timestamppb.New(now),
-			EndTime:   timestamppb.New(now.Add(time.Second)),
-			Events: []*v1.Event{
-				{
-					Payload: &v1.Event_Window{
-						Window: &v1.WindowEvent{
-							Timestamp:   timestamppb.New(now),
-							Action:      "focus",
-							WindowTitle: "Test Window",
-							ProcessName: "test.exe",
-						},
+func TestToDomainTickBatch_Valid(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	pb := &v1.TickBatch{
+		TickIndex: 5,
+		StartTime: timestamppb.New(now),
+		EndTime:   timestamppb.New(now.Add(time.Second)),
+		Events: []*v1.Event{
+			{
+				Payload: &v1.Event_Window{
+					Window: &v1.WindowEvent{
+						Timestamp:   timestamppb.New(now),
+						Action:      "focus",
+						WindowTitle: "Test Window",
+						ProcessName: "test.exe",
 					},
 				},
-				nil, // should be skipped gracefully
 			},
-		}
+			nil, // should be skipped gracefully
+		},
+	}
 
-		domainBatch := ToDomainTickBatch(pb)
-		if domainBatch.TickIndex != 5 {
-			t.Errorf("expected tickIndex 5, got %d", domainBatch.TickIndex)
-		}
-		if domainBatch.Len() != 1 {
-			t.Fatalf("expected 1 valid event, got %d", domainBatch.Len())
-		}
-		winEv, ok := domainBatch.Events()[0].(events.WindowEvent)
-		if !ok || winEv.WindowTitle != "Test Window" {
-			t.Errorf("unexpected event: %+v", domainBatch.Events()[0])
-		}
-	})
+	domainBatch := ToDomainTickBatch(pb)
+	if domainBatch.TickIndex != 5 {
+		t.Errorf("expected tickIndex 5, got %d", domainBatch.TickIndex)
+	}
+	if domainBatch.Len() != 1 {
+		t.Fatalf("expected 1 valid event, got %d", domainBatch.Len())
+	}
+	winEv, ok := domainBatch.Events()[0].(events.WindowEvent)
+	if !ok || winEv.WindowTitle != "Test Window" {
+		t.Errorf("unexpected event: %+v", domainBatch.Events()[0])
+	}
+}
+
+func TestToDomainTickBatch_PreRollAndBoundary(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	pb := &v1.TickBatch{
+		TickIndex: 0,
+		StartTime: timestamppb.New(now),
+		EndTime:   timestamppb.New(now.Add(time.Second)),
+		Events: []*v1.Event{
+			{
+				Payload: &v1.Event_Window{
+					Window: &v1.WindowEvent{
+						Timestamp:   timestamppb.New(now.Add(-500 * time.Millisecond)),
+						Action:      "focus",
+						WindowTitle: "Pre-roll Window",
+						ProcessName: "init.exe",
+					},
+				},
+			},
+			{
+				Payload: &v1.Event_Mouse{
+					Mouse: &v1.MouseEvent{
+						Timestamp: timestamppb.New(now.Add(time.Second)), // exactly on upper boundary
+						Action:    "click",
+						Button:    "left",
+					},
+				},
+			},
+		},
+	}
+
+	domainBatch := ToDomainTickBatch(pb)
+	if domainBatch.TickIndex != 0 {
+		t.Errorf("expected tickIndex 0, got %d", domainBatch.TickIndex)
+	}
+	if domainBatch.Len() != 2 {
+		t.Fatalf("expected 2 events, got %d", domainBatch.Len())
+	}
+	evs := domainBatch.Events()
+	if winEv, ok := evs[0].(events.WindowEvent); !ok || winEv.WindowTitle != "Pre-roll Window" {
+		t.Errorf("unexpected first event: %+v", evs[0])
+	}
+	if mouseEv, ok := evs[1].(events.MouseEvent); !ok || mouseEv.Action != "click" {
+		t.Errorf("unexpected second event: %+v", evs[1])
+	}
 }
 
 func TestToDomainEvent_Nil(t *testing.T) {

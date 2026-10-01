@@ -1,6 +1,8 @@
 package mapper
 
 import (
+	"time"
+
 	"assessment/modules/libs/domain/display"
 	"assessment/modules/libs/domain/events"
 	v1 "assessment/modules/libs/protocol/gen/go/v1"
@@ -22,6 +24,13 @@ func ToDomainTickBatch(pb *v1.TickBatch) events.TickBatch {
 
 	for _, rawEv := range pb.GetEvents() {
 		if ev := ToDomainEvent(rawEv); ev != nil {
+			ts := ev.GetTimestamp()
+			if pb.GetTickIndex() > 0 && ts.Before(batch.StartTime) {
+				batch.StartTime = ts
+			}
+			if !ts.Before(batch.EndTime) {
+				batch.EndTime = ts.Add(time.Nanosecond)
+			}
 			_ = batch.Add(ev)
 		}
 	}
