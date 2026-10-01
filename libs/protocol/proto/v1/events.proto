@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package assessment.protocol.v1;
+
+option go_package = "assessment/libs/protocol/gen/go/v1;v1";
+
+import "google/protobuf/timestamp.proto";
+
+message Point {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+message Size {
+  int32 width = 1;
+  int32 height = 2;
+}
+
+message Rectangle {
+  int32 x = 1;
+  int32 y = 2;
+  int32 width = 3;
+  int32 height = 4;
+}
+
+message WindowEvent {
+  google.protobuf.Timestamp timestamp = 1;
+  string action = 2;
+  string window_title = 3;
+  string process_name = 4;
+  string application_name = 5;
+  Rectangle window_rect = 6;
+  string window_state = 7;
+  string url = 8;
+  string domain = 9;
+  int32 dwell_time_ms = 10;
+}
+
+message MouseEvent {
+  google.protobuf.Timestamp timestamp = 1;
+  string action = 2;
+  string button = 3;
+  Point position = 4;
+  string click_count = 5;
+  string window_title = 6;
+  string process_name = 7;
+}
+
+message ClipboardEvent {
+  google.protobuf.Timestamp timestamp = 1;
+  string action = 2;
+  string text = 3;
+  int32 length = 4;
+  string source_app = 5;
+  repeated string formats = 6;
+}
+
+message OCRTextBlock {
+  string text = 1;
+  Rectangle box = 2;
+  double confidence = 3;
+}
+
+message OCREvent {
+  google.protobuf.Timestamp timestamp = 1;
+  string filename = 2;
+  int32 display_id = 3;
+  Size resolution = 4;
+  double scale_factor = 5;
+  Rectangle window_rect = 6;
+  repeated OCRTextBlock blocks = 7;
+  string deduplicated_from = 8;
+}
+
+message GenericActivityEvent {
+  google.protobuf.Timestamp timestamp = 1;
+  string type = 2;
+}
+
+message Event {
+  oneof payload {
+    WindowEvent window = 1;
+    MouseEvent mouse = 2;
+    ClipboardEvent clipboard = 3;
+    OCREvent ocr = 4;
+    GenericActivityEvent generic = 5;
+  }
+}
+
+message TickBatch {
+  int32 tick_index = 1;
+  google.protobuf.Timestamp start_time = 2;
+  google.protobuf.Timestamp end_time = 3;
+  repeated Event events = 4;
+}

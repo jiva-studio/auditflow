@@ -6,9 +6,11 @@ MUTATE_CMD ?= go run github.com/go-gremlins/gremlins/cmd/gremlins@latest unleash
 
 .PHONY: fmt \
         domain_guard domain_test domain_lint domain_mutate \
+        protocol_gen protocol_test protocol_lint \
         agent_test agent_lint agent_mutate \
         server_test server_lint server_mutate \
-        streamer_test streamer_lint streamer_mutate
+        streamer_test streamer_lint streamer_mutate \
+        e2e_test
 
 fmt:
 	gofmt -s -w libs/ modules/ tests/
@@ -29,6 +31,19 @@ domain_lint:
 
 domain_mutate:
 	cd libs/domain && $(MUTATE_CMD)
+
+# ==============================================================================
+# LIBS / PROTOCOL
+# ==============================================================================
+
+protocol_gen:
+	protoc -I libs/protocol/proto/v1 --go_out=libs/protocol/gen/go/v1 --go_opt=paths=source_relative libs/protocol/proto/v1/events.proto libs/protocol/proto/v1/audit.proto
+
+protocol_test:
+	cd libs/protocol && go test -count=1 ./...
+
+protocol_lint:
+	cd libs/protocol && golangci-lint run ./...
 
 # ==============================================================================
 # MODULES / AGENT
@@ -68,3 +83,10 @@ streamer_lint:
 
 streamer_mutate:
 	cd modules/streamer && $(MUTATE_CMD)
+
+# ==============================================================================
+# TESTS / E2E
+# ==============================================================================
+
+e2e_test:
+	cd tests/e2e && go test -count=1 ./...
