@@ -46,14 +46,12 @@ func (r *MemoryRepository) Find(ctx context.Context, filter audit.Filter) ([]aud
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var matched []audit.Popup
+	matched := make([]audit.Popup, 0)
 	for _, p := range r.popups {
 		if filter.Matches(p) {
 			matched = append(matched, p)
 		}
 	}
 
-	result := make([]audit.Popup, len(matched))
-	copy(result, matched)
-	return result, nil
+	return matched, nil
 }

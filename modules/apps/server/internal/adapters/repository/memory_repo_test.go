@@ -120,3 +120,19 @@ func TestMemoryRepository_ConcurrentAccess(t *testing.T) {
 		t.Fatalf("expected %d total items, got %d", expectedTotal, len(all))
 	}
 }
+
+func TestMemoryRepository_FindEmpty(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+
+	results, err := repo.Find(ctx, audit.Filter{Employee: "non-existent"})
+	if err != nil {
+		t.Fatalf("unexpected find error: %v", err)
+	}
+	if results == nil {
+		t.Fatal("expected non-nil empty slice")
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected 0 results, got %d", len(results))
+	}
+}
