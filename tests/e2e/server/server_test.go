@@ -148,8 +148,8 @@ func TestServer_E2E_FullPipeline(t *testing.T) {
 
 	waitForHealth(t, serverURL, 5*time.Second)
 
-	// 2. Stream all 5 recording scenarios into dedicated agents pointing to the server
-	employees := []string{"emp-1", "emp-2", "emp-3", "emp-synthetic", "emp-edge"}
+	// 2. Stream all 6 recording scenarios into dedicated agents pointing to the server
+	employees := []string{"emp-1", "emp-2", "emp-3", "emp-synthetic", "emp-edge", "emp-multidisplay", "emp-quadhd"}
 
 	for _, empID := range employees {
 		archivePath := filepath.Join(dataDir, empID+".tar.gz")

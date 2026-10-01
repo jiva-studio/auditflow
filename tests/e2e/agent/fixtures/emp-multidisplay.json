@@ -1,0 +1,34 @@
+{
+  "employee_id": "emp-multidisplay",
+  "total_popups": 4,
+  "popups": [
+    {
+      "employee": "emp-multidisplay",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T18:00:01Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Complex Multi-Display Strategy"
+    },
+    {
+      "employee": "emp-multidisplay",
+      "rule": "urgent-email-opened",
+      "ts": "2026-03-10T18:00:02Z",
+      "title": "Urgent email",
+      "body": "Urgent Financial Review"
+    },
+    {
+      "employee": "emp-multidisplay",
+      "rule": "jira-ticket-done",
+      "ts": "2026-03-10T18:00:03Z",
+      "title": "Ticket moved to Done",
+      "body": "PROJ-123 - Jira - Google Chrome"
+    },
+    {
+      "employee": "emp-multidisplay",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T18:00:04Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-778899. Attach the invoice to this email?"
+    }
+  ]
+}

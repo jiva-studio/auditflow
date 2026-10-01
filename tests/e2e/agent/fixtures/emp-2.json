@@ -1,6 +1,6 @@
 {
   "employee_id": "emp-2",
-  "total_popups": 3,
+  "total_popups": 4,
   "popups": [
     {
       "employee": "emp-2",
@@ -8,6 +8,13 @@
       "ts": "2026-03-10T16:05:25Z",
       "title": "Forwarded email",
       "body": "You opened a forwarded email: FW: Q3 media plan - final"
+    },
+    {
+      "employee": "emp-2",
+      "rule": "jira-ticket-done",
+      "ts": "2026-03-10T16:09:47Z",
+      "title": "Ticket moved to Done",
+      "body": "[OPS-1423] Billing export drops March rows - Jira - Google Chrome"
     },
     {
       "employee": "emp-2",

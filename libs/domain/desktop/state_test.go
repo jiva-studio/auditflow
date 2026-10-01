@@ -678,3 +678,101 @@ func TestDesktopState_FindInAllLayers_WithoutMagicResolution(t *testing.T) {
 		t.Errorf("expected false for zero resolution layer without display")
 	}
 }
+
+func TestDesktopState_MultiDisplay_DeduplicationLifecycle(t *testing.T) {
+	d0, _ := display.NewDisplay(0, geometry.Rectangle{X: 0, Y: 0, Width: 1920, Height: 1080}, 1.0, true)
+	d1, _ := display.NewDisplay(1, geometry.Rectangle{X: 1920, Y: 0, Width: 1920, Height: 1080}, 1.0, false)
+	state := desktop.NewState(d0, d1)
+	now := time.Now()
+
+	// T1: Display 1 receives an OCR frame with "Delete Account"
+	state.Apply(events.OCREvent{
+		DisplayID:  1,
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Filename:   "frame_d1_1.jpg",
+		Blocks:     []display.OCRTextBlock{{Text: "Delete Account", Box: geometry.Rectangle{X: 100, Y: 100, Width: 200, Height: 50}}},
+		Timestamp:  now,
+	})
+	if txt, hit := state.FindTextAt(geometry.Point{X: 2070, Y: 120}); !hit || txt != "Delete Account" {
+		t.Fatalf("expected hit on Display 1 at T1, got %q, %v", txt, hit)
+	}
+
+	// T2: Display 0 receives a new OCR frame, Display 1 sends deduplication
+	state.Apply(events.OCREvent{
+		DisplayID:  0,
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Filename:   "frame_d0_2.jpg",
+		Blocks:     []display.OCRTextBlock{{Text: "Display 0 New Text", Box: geometry.Rectangle{X: 50, Y: 50, Width: 100, Height: 40}}},
+		Timestamp:  now.Add(time.Second),
+	})
+	state.Apply(events.OCREvent{
+		DisplayID:        1,
+		Resolution:       geometry.Size{Width: 1920, Height: 1080},
+		Filename:         "frame_d1_2.jpg",
+		DeduplicatedFrom: "frame_d1_1.jpg",
+		Timestamp:        now.Add(time.Second),
+	})
+
+	if txt, hit := state.FindTextAt(geometry.Point{X: 2070, Y: 120}); !hit || txt != "Delete Account" {
+		t.Fatalf("expected hit on Display 1 at T2 after deduplication, got %q, %v", txt, hit)
+	}
+	if txt0, hit0 := state.FindTextAt(geometry.Point{X: 80, Y: 60}); !hit0 || txt0 != "Display 0 New Text" {
+		t.Fatalf("expected hit on Display 0 at T2, got %q, %v", txt0, hit0)
+	}
+
+	// T3: Screen cleared without deduplication
+	state.Apply(events.OCREvent{
+		DisplayID:  1,
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Filename:   "frame_d1_3.jpg",
+		Timestamp:  now.Add(2 * time.Second),
+	})
+	if _, hitCleared := state.FindTextAt(geometry.Point{X: 2070, Y: 120}); hitCleared {
+		t.Fatalf("expected miss on Display 1 after screen cleared")
+	}
+}
+
+func TestDesktopState_QuadMonitor_FractionalDPI_HitTesting(t *testing.T) {
+	d0, _ := display.NewDisplay(0, geometry.Rectangle{X: 0, Y: 0, Width: 5120, Height: 1440}, 1.0, true)
+	d1, _ := display.NewDisplay(1, geometry.Rectangle{X: -1920, Y: -1080, Width: 1920, Height: 1080}, 1.0, false)
+	d2, _ := display.NewDisplay(2, geometry.Rectangle{X: 0, Y: -1440, Width: 2560, Height: 1440}, 1.25, false)
+	d3, _ := display.NewDisplay(3, geometry.Rectangle{X: -3840, Y: 0, Width: 3840, Height: 2160}, 1.5, false)
+	state := desktop.NewState(d0, d1, d2, d3)
+	now := time.Now()
+
+	state.Apply(events.OCREvent{
+		DisplayID:  0,
+		Resolution: geometry.Size{Width: 5120, Height: 1440},
+		Blocks:     []display.OCRTextBlock{{Text: "Super UltraWide Right Wing", Box: geometry.Rectangle{X: 4000, Y: 500, Width: 600, Height: 100}}},
+		Timestamp:  now,
+	})
+	state.Apply(events.OCREvent{
+		DisplayID:  1,
+		Resolution: geometry.Size{Width: 1920, Height: 1080},
+		Blocks:     []display.OCRTextBlock{{Text: "Top-Left Negative Monitor", Box: geometry.Rectangle{X: 420, Y: 280, Width: 300, Height: 60}}},
+		Timestamp:  now,
+	})
+	state.Apply(events.OCREvent{
+		DisplayID:  2,
+		Resolution: geometry.Size{Width: 2560, Height: 1440},
+		Blocks:     []display.OCRTextBlock{{Text: "Top-Right QHD Monitor", Box: geometry.Rectangle{X: 1000, Y: 440, Width: 400, Height: 80}}},
+		Timestamp:  now,
+	})
+	state.Apply(events.OCREvent{
+		DisplayID:  3,
+		Resolution: geometry.Size{Width: 3840, Height: 2160},
+		Blocks:     []display.OCRTextBlock{{Text: "Bottom-Left 4K Monitor", Box: geometry.Rectangle{X: 1840, Y: 1000, Width: 500, Height: 120}}},
+		Timestamp:  now,
+	})
+
+	assertHit := func(x, y int, want string) {
+		t.Helper()
+		if txt, hit := state.FindTextAt(geometry.Point{X: x, Y: y}); !hit || txt != want {
+			t.Errorf("hit at (%d,%d) failed: got %q, %v, want %q", x, y, txt, hit, want)
+		}
+	}
+	assertHit(4100, 520, "Super UltraWide Right Wing")
+	assertHit(-1470, -780, "Top-Left Negative Monitor")
+	assertHit(1050, -980, "Top-Right QHD Monitor")
+	assertHit(-1940, 1050, "Bottom-Left 4K Monitor")
+}

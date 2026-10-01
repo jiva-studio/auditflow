@@ -1,0 +1,41 @@
+{
+  "employee_id": "emp-quadhd",
+  "total_popups": 5,
+  "popups": [
+    {
+      "employee": "emp-quadhd",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T20:00:01Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Quad Display Plan"
+    },
+    {
+      "employee": "emp-quadhd",
+      "rule": "urgent-email-opened",
+      "ts": "2026-03-10T20:00:02Z",
+      "title": "Urgent email",
+      "body": "Urgent Server Alert"
+    },
+    {
+      "employee": "emp-quadhd",
+      "rule": "jira-ticket-done",
+      "ts": "2026-03-10T20:00:03Z",
+      "title": "Ticket moved to Done",
+      "body": "OPS-889 - Jira - Microsoft Edge"
+    },
+    {
+      "employee": "emp-quadhd",
+      "rule": "salesforce-record-deleted",
+      "ts": "2026-03-10T20:00:04Z",
+      "title": "Record deleted",
+      "body": "Deleted in Salesforce: 00998811 | Case | Salesforce - Google Chrome"
+    },
+    {
+      "employee": "emp-quadhd",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T20:00:06Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-445566. Attach the invoice to this email?"
+    }
+  ]
+}
