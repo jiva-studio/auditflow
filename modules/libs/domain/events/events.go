@@ -168,14 +168,11 @@ func (b *TickBatch) Add(event Event) error {
 		return ErrNilEvent
 	}
 	ts := event.GetTimestamp()
-	if b.TickIndex == 0 {
-		if !ts.Before(b.EndTime) {
+	if !b.isTimestampWithinBounds(ts) {
+		if b.TickIndex == 0 {
 			return fmt.Errorf("event timestamp %v outside [-, %v): %w", ts, b.EndTime, ErrEventOutOfBounds)
 		}
-	} else {
-		if ts.Before(b.StartTime) || !ts.Before(b.EndTime) {
-			return fmt.Errorf("event timestamp %v outside [%v, %v): %w", ts, b.StartTime, b.EndTime, ErrEventOutOfBounds)
-		}
+		return fmt.Errorf("event timestamp %v outside [%v, %v): %w", ts, b.StartTime, b.EndTime, ErrEventOutOfBounds)
 	}
 
 	idx := sort.Search(len(b.events), func(i int) bool {
@@ -185,6 +182,13 @@ func (b *TickBatch) Add(event Event) error {
 	copy(b.events[idx+1:], b.events[idx:])
 	b.events[idx] = event
 	return nil
+}
+
+func (b *TickBatch) isTimestampWithinBounds(ts time.Time) bool {
+	if !ts.Before(b.EndTime) {
+		return false
+	}
+	return b.TickIndex == 0 || !ts.Before(b.StartTime)
 }
 
 // Events returns a copy of the ordered events contained within the batch.

@@ -40,8 +40,7 @@ func renderTemplate(tmpl string, vars map[string]string) string {
 	var sb strings.Builder
 	sb.Grow(len(tmpl))
 
-	i := 0
-	for i < len(tmpl) {
+	for i := 0; i < len(tmpl); {
 		start := strings.IndexByte(tmpl[i:], '{')
 		if start == -1 {
 			sb.WriteString(tmpl[i:])
@@ -57,7 +56,6 @@ func renderTemplate(tmpl string, vars map[string]string) string {
 		}
 		end += start + 1
 
-		// If there is an inner '{' between start+1 and end, write the prefix as literal
 		if innerStart := strings.LastIndexByte(tmpl[start+1:end], '{'); innerStart != -1 {
 			actualStart := start + 1 + innerStart
 			sb.WriteString(tmpl[start:actualStart])
@@ -65,29 +63,24 @@ func renderTemplate(tmpl string, vars map[string]string) string {
 		}
 
 		token := tmpl[start+1 : end]
-		if vars != nil {
-			if val, ok := vars[token]; ok {
-				sb.WriteString(val)
-				i = end + 1
-				continue
-			}
-		}
-
-		if token == "" {
-			sb.WriteString("{}")
-			i = end + 1
-			continue
-		}
-
-		if strings.ContainsAny(token, " \t\r\n") {
-			sb.WriteString(tmpl[start : end+1])
-			i = end + 1
-			continue
-		}
-
-		// Unresolved variable placeholder: cleanly strip
+		sb.WriteString(resolveToken(token, tmpl[start:end+1], vars))
 		i = end + 1
 	}
 
 	return sb.String()
+}
+
+func resolveToken(token, fullToken string, vars map[string]string) string {
+	if vars != nil {
+		if val, ok := vars[token]; ok {
+			return val
+		}
+	}
+	if token == "" {
+		return "{}"
+	}
+	if strings.ContainsAny(token, " \t\r\n") {
+		return fullToken
+	}
+	return ""
 }
