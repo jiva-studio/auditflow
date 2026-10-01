@@ -2,12 +2,7 @@
 # GLOBAL UTILITIES
 # ==============================================================================
 
-.PHONY: fmt \
-        domain_test domain_lint \
-        agent_test agent_lint \
-        server_test server_lint \
-        streamer_test streamer_lint \
-        e2e_test
+.PHONY: fmt
 
 fmt:
 	gofmt -s -w libs/ modules/ tests/
@@ -15,6 +10,10 @@ fmt:
 # ==============================================================================
 # LIBS / DOMAIN
 # ==============================================================================
+
+domain_guard:
+	python3 scripts/guards/domain/no_json.py
+	python3 scripts/guards/domain/no_io.py
 
 domain_test:
 	cd libs/domain && go test -count=1 ./...
