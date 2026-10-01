@@ -110,13 +110,14 @@ func (h *HTTPHandler) handleAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPHandler) handleRecordPopup(w http.ResponseWriter, r *http.Request) {
+	defer func() { _ = r.Body.Close() }()
+
 	bodyReader := http.MaxBytesReader(w, r.Body, maxPopupPayloadSize)
 	body, err := io.ReadAll(bodyReader)
 	if err != nil {
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
 		return
 	}
-	defer func() { _ = r.Body.Close() }()
 
 	popup, err := parseIncomingPopup(r.Header.Get("Content-Type"), body)
 	if err != nil {

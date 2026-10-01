@@ -98,6 +98,8 @@ func (h *HTTPHandler) handleTick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defer func() { _ = r.Body.Close() }()
+
 	bodyReader := http.MaxBytesReader(w, r.Body, maxTickPayloadSize)
 	data, err := io.ReadAll(bodyReader)
 	if err != nil {

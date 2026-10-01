@@ -201,4 +201,15 @@ func TestHTTPHandler_Tick_Errors(t *testing.T) {
 			t.Errorf("expected status 500, got %d", w.Code)
 		}
 	})
+
+	t.Run("POST /tick oversized payload", func(t *testing.T) {
+		hugePayload := bytes.Repeat([]byte{0x08, 0x01}, 9*1024*1024) // 18MB > 16MB limit
+		req := httptest.NewRequest(http.MethodPost, "/tick", bytes.NewReader(hugePayload))
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status 400 on oversized payload, got %d", w.Code)
+		}
+	})
 }
