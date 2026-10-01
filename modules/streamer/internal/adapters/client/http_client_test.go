@@ -105,4 +105,29 @@ func TestHTTPClient_SendTick_Errors(t *testing.T) {
 			t.Fatalf("expected network error, got nil")
 		}
 	})
+
+	t.Run("multiple requests reuse connection pool", func(t *testing.T) {
+		reqCount := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			reqCount++
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		c, err := client.NewHTTPClient(server.URL, time.Second)
+		if err != nil {
+			t.Fatalf("unexpected init error: %v", err)
+		}
+
+		start := time.Date(2026, 3, 10, 10, 0, 0, 0, time.UTC)
+		for i := 0; i < 5; i++ {
+			batch, _ := events.NewTickBatch(i, start.Add(time.Duration(i)*time.Second), start.Add(time.Duration(i+1)*time.Second))
+			if err := c.SendTick(context.Background(), batch); err != nil {
+				t.Fatalf("send tick %d error: %v", i, err)
+			}
+		}
+		if reqCount != 5 {
+			t.Fatalf("expected 5 requests, got: %d", reqCount)
+		}
+	})
 }

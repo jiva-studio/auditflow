@@ -35,10 +35,16 @@ func NewHTTPClient(agentURL string, timeout time.Duration) (*HTTPClient, error) 
 		return nil, ErrEmptyAgentURL
 	}
 	baseURL := strings.TrimRight(agentURL, "/")
+	transport := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 100,
+		IdleConnTimeout:     90 * time.Second,
+	}
 	return &HTTPClient{
 		agentURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: timeout,
+			Transport: transport,
+			Timeout:   timeout,
 		},
 	}, nil
 }
