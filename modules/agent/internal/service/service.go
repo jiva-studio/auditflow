@@ -21,6 +21,7 @@ var (
 	ErrEmptyEmployeeID   = errors.New("employee ID cannot be empty")
 	ErrNilAuditClient    = errors.New("audit client cannot be nil")
 	ErrDispatchPopupFail = errors.New("failed to dispatch audit popup")
+	ErrNoRulesLoaded     = errors.New("no rules loaded")
 )
 
 // Service coordinates desktop state updates, spatial hit-testing, rule evaluation, and audit popup emission.
@@ -58,6 +59,18 @@ func NewService(employeeID string, state *desktop.State, rls []rules.Rule, audit
 }
 
 var _ ports.AgentService = (*Service)(nil)
+
+// CheckReadiness validates that rules are loaded and ready.
+func (s *Service) CheckReadiness(_ context.Context) error {
+	s.mu.Lock()
+	rulesCount := len(s.rules)
+	s.mu.Unlock()
+
+	if rulesCount == 0 {
+		return ErrNoRulesLoaded
+	}
+	return nil
+}
 
 // ProcessTick processes an incoming batch of events in strict sequence.
 func (s *Service) ProcessTick(ctx context.Context, batch events.TickBatch) error {

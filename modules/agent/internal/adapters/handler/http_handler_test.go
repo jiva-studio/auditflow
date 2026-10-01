@@ -17,8 +17,9 @@ import (
 )
 
 type mockService struct {
-	processErr error
-	lastBatch  events.TickBatch
+	processErr   error
+	readinessErr error
+	lastBatch    events.TickBatch
 }
 
 func (m *mockService) ProcessTick(_ context.Context, batch events.TickBatch) error {
@@ -27,6 +28,10 @@ func (m *mockService) ProcessTick(_ context.Context, batch events.TickBatch) err
 	}
 	m.lastBatch = batch
 	return nil
+}
+
+func (m *mockService) CheckReadiness(_ context.Context) error {
+	return m.readinessErr
 }
 
 func TestNewHTTPHandler(t *testing.T) {
@@ -61,6 +66,64 @@ func TestHTTPHandler_Health(t *testing.T) {
 
 	t.Run("POST /health method not allowed", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/health", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Errorf("expected status 405, got %d", w.Code)
+		}
+	})
+}
+
+func TestHTTPHandler_LiveAndReady(t *testing.T) {
+	mock := &mockService{}
+	h, _ := NewHTTPHandler(mock)
+	router := h.Routes()
+
+	t.Run("GET /health/live success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", w.Code)
+		}
+	})
+
+	t.Run("POST /health/live method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/health/live", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Errorf("expected status 405, got %d", w.Code)
+		}
+	})
+
+	t.Run("GET /health/ready success", func(t *testing.T) {
+		mock.readinessErr = nil
+		req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", w.Code)
+		}
+	})
+
+	t.Run("GET /health/ready failure", func(t *testing.T) {
+		mock.readinessErr = errors.New("upstream offline")
+		req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusServiceUnavailable {
+			t.Errorf("expected status 503, got %d", w.Code)
+		}
+	})
+
+	t.Run("POST /health/ready method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/health/ready", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 

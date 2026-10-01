@@ -39,6 +39,8 @@ func (h *HTTPHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/tick", h.handleTick)
 	mux.HandleFunc("/health", h.handleHealth)
+	mux.HandleFunc("/health/live", h.handleLive)
+	mux.HandleFunc("/health/ready", h.handleReady)
 	return mux
 }
 
@@ -50,6 +52,32 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintln(w, `{"status":"ok"}`)
+}
+
+func (h *HTTPHandler) handleLive(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = fmt.Fprintln(w, `{"status":"live"}`)
+}
+
+func (h *HTTPHandler) handleReady(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := h.service.CheckReadiness(r.Context()); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = fmt.Fprintf(w, "{\"status\":\"not ready\",\"error\":%q}\n", err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = fmt.Fprintln(w, `{"status":"ready"}`)
 }
 
 func (h *HTTPHandler) handleTick(w http.ResponseWriter, r *http.Request) {

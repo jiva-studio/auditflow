@@ -257,3 +257,28 @@ func TestService_Concurrency(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestService_CheckReadiness(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		client := &mockAuditClient{}
+		rls := sampleTestRules(t)
+		svc, err := NewService("emp-1", nil, rls, client)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if err := svc.CheckReadiness(context.Background()); err != nil {
+			t.Fatalf("expected readiness check to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("no rules loaded", func(t *testing.T) {
+		client := &mockAuditClient{}
+		svc, err := NewService("emp-1", nil, nil, client)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if err := svc.CheckReadiness(context.Background()); !errors.Is(err, ErrNoRulesLoaded) {
+			t.Fatalf("expected ErrNoRulesLoaded, got: %v", err)
+		}
+	})
+}
