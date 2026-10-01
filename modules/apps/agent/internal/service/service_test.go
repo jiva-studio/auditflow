@@ -159,6 +159,7 @@ func TestService_ProcessTick_ClickMatch(t *testing.T) {
 		Position:    geometry.Point{X: 150, Y: 110},
 		ProcessName: "OUTLOOK.EXE",
 		WindowTitle: "Inbox - Outlook",
+		IsClick:     true,
 	})
 
 	ctx := context.Background()
@@ -306,71 +307,6 @@ func TestService_CheckReadiness(t *testing.T) {
 	})
 }
 
-func TestIsClickEvent(t *testing.T) {
-	tests := []struct {
-		name     string
-		event    events.MouseEvent
-		expected bool
-	}{
-		// Primary button clicks
-		{name: "standard left click", event: events.MouseEvent{Action: "click", Button: "left"}, expected: true},
-		{name: "primary button click", event: events.MouseEvent{Action: "click", Button: "primary"}, expected: true},
-		{name: "main button click", event: events.MouseEvent{Action: "click", Button: "main"}, expected: true},
-		{name: "mousedown action", event: events.MouseEvent{Action: "mousedown", Button: "primary"}, expected: true},
-		{name: "mouse_click action", event: events.MouseEvent{Action: "mouse_click", Button: "primary"}, expected: true},
-		{name: "left button without action", event: events.MouseEvent{Button: "left"}, expected: true},
-		{name: "primary button without action", event: events.MouseEvent{Button: "primary"}, expected: true},
-		{name: "main button without action", event: events.MouseEvent{Button: "main"}, expected: true},
-		{name: "click action without button", event: events.MouseEvent{Action: "click"}, expected: true},
-		{name: "mousedown action without button", event: events.MouseEvent{Action: "mousedown"}, expected: true},
-		{name: "mouse_click action without button", event: events.MouseEvent{Action: "mouse_click"}, expected: true},
-		{name: "click count single", event: events.MouseEvent{ClickCount: "single"}, expected: true},
-		{name: "click count double", event: events.MouseEvent{ClickCount: "double"}, expected: true},
-		{name: "click count 1", event: events.MouseEvent{ClickCount: "1"}, expected: true},
-		{name: "case insensitive primary button", event: events.MouseEvent{Action: "CLICK", Button: "PRIMARY"}, expected: true},
-
-		// Move & gesture rejections
-		{name: "move action rejected", event: events.MouseEvent{Action: "move", Button: "primary"}, expected: false},
-		{name: "mousemove action rejected", event: events.MouseEvent{Action: "mousemove", Button: "left"}, expected: false},
-		{name: "drag action rejected", event: events.MouseEvent{Action: "drag", Button: "left"}, expected: false},
-		{name: "mousedrag action rejected", event: events.MouseEvent{Action: "mousedrag", Button: "primary"}, expected: false},
-		{name: "scroll action rejected", event: events.MouseEvent{Action: "scroll", Button: "primary"}, expected: false},
-		{name: "mousescroll action rejected", event: events.MouseEvent{Action: "mousescroll", Button: "left"}, expected: false},
-		{name: "up action rejected", event: events.MouseEvent{Action: "up", Button: "left"}, expected: false},
-		{name: "mouseup action rejected", event: events.MouseEvent{Action: "mouseup", Button: "primary"}, expected: false},
-		{name: "release action rejected", event: events.MouseEvent{Action: "release", Button: "main"}, expected: false},
-		{name: "move action with click count rejected", event: events.MouseEvent{Action: "move", ClickCount: "single"}, expected: false},
-		{name: "drag action with primary button rejected", event: events.MouseEvent{Action: "drag", Button: "primary", ClickCount: "1"}, expected: false},
-
-		// Middle click rejections
-		{name: "middle click rejected", event: events.MouseEvent{Action: "click", Button: "middle"}, expected: false},
-		{name: "middle mousedown rejected", event: events.MouseEvent{Action: "mousedown", Button: "middle"}, expected: false},
-		{name: "middle mouse_click rejected", event: events.MouseEvent{Action: "mouse_click", Button: "middle"}, expected: false},
-		{name: "middle button without action rejected", event: events.MouseEvent{Button: "middle"}, expected: false},
-
-		// Right click rejections
-		{name: "right click rejected", event: events.MouseEvent{Action: "click", Button: "right"}, expected: false},
-		{name: "right mousedown rejected", event: events.MouseEvent{Action: "mousedown", Button: "right"}, expected: false},
-		{name: "right mouse_click rejected", event: events.MouseEvent{Action: "mouse_click", Button: "right"}, expected: false},
-		{name: "right button without action rejected", event: events.MouseEvent{Button: "right"}, expected: false},
-
-		// Click count zero / none rejections
-		{name: "empty event rejected", event: events.MouseEvent{}, expected: false},
-		{name: "zero click count rejected", event: events.MouseEvent{ClickCount: "0"}, expected: false},
-		{name: "none click count rejected", event: events.MouseEvent{ClickCount: "none"}, expected: false},
-	}
-
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			actual := isClickEvent(tc.event)
-			if actual != tc.expected {
-				t.Errorf("isClickEvent(%+v) = %v, want %v", tc.event, actual, tc.expected)
-			}
-		})
-	}
-}
-
 func TestService_ProcessTick_LeftHandedMouseClicks(t *testing.T) {
 	client := &mockAuditClient{}
 	rls := sampleTestRules(t)
@@ -409,6 +345,7 @@ func TestService_ProcessTick_LeftHandedMouseClicks(t *testing.T) {
 		Button:      "primary",
 		Position:    geometry.Point{X: 150, Y: 110},
 		ProcessName: "OUTLOOK.EXE",
+		IsClick:     false,
 	})
 
 	// Left-handed primary click
@@ -419,6 +356,7 @@ func TestService_ProcessTick_LeftHandedMouseClicks(t *testing.T) {
 		Position:    geometry.Point{X: 150, Y: 110},
 		ProcessName: "OUTLOOK.EXE",
 		WindowTitle: "Inbox - Outlook",
+		IsClick:     true,
 	})
 
 	ctx := context.Background()
@@ -461,6 +399,7 @@ func runChaosBatch(workerID int, acts, btns, ccs []string) events.TickBatch {
 			ClickCount:  ccs[(workerID+j*3)%len(ccs)],
 			Position:    geometry.Point{X: -9999 + workerID*100 + j, Y: -9999 + workerID*50 + j},
 			ProcessName: "OUTLOOK.EXE",
+			IsClick:     (workerID+j)%2 == 0,
 		})
 	}
 	return batch
@@ -550,6 +489,7 @@ func TestService_ProcessTick_ClickProcessNameOverride(t *testing.T) {
 		Position:    geometry.Point{X: 150, Y: 110},
 		ProcessName: "OUTLOOK.EXE",
 		WindowTitle: "Inbox - Outlook",
+		IsClick:     true,
 	})
 
 	if err := svc.ProcessTick(context.Background(), batch); err != nil {
@@ -602,6 +542,7 @@ func TestService_ProcessTick_ClickProcessNameMismatch(t *testing.T) {
 		Position:    geometry.Point{X: 150, Y: 110},
 		ProcessName: "notepad.exe",
 		WindowTitle: "Untitled - Notepad",
+		IsClick:     true,
 	})
 
 	if err := svc.ProcessTick(context.Background(), batch); err != nil {
@@ -651,6 +592,7 @@ func TestService_ProcessTick_ClickWindowTitleOverride(t *testing.T) {
 		Position:    geometry.Point{X: 320, Y: 310},
 		ProcessName: "crm.exe",
 		WindowTitle: "Edit - Customer Record #42",
+		IsClick:     true,
 	})
 
 	if err := svc.ProcessTick(context.Background(), batch); err != nil {
@@ -700,6 +642,7 @@ func TestService_ProcessTick_ClickFallbackToBackgroundState(t *testing.T) {
 		Action:    "click",
 		Button:    "left",
 		Position:  geometry.Point{X: 150, Y: 110},
+		IsClick:   true,
 	})
 
 	if err := svc.ProcessTick(context.Background(), batch); err != nil {
@@ -751,6 +694,7 @@ func TestService_ProcessTick_ClickChromeLegacyWindowFallback(t *testing.T) {
 		Position:    geometry.Point{X: 150, Y: 110},
 		ProcessName: "msedgewebview2.exe",
 		WindowTitle: "Chrome Legacy Window",
+		IsClick:     true,
 	})
 
 	if err := svc.ProcessTick(context.Background(), batch); err != nil {
@@ -795,6 +739,7 @@ func createStressBatch(workerID, i int) events.TickBatch {
 		Position:    geometry.Point{X: 150, Y: 110},
 		ProcessName: "OUTLOOK.EXE",
 		WindowTitle: "Inbox - Outlook",
+		IsClick:     true,
 	})
 
 	_ = batch.Add(events.MouseEvent{
@@ -803,6 +748,7 @@ func createStressBatch(workerID, i int) events.TickBatch {
 		Button:      "left",
 		Position:    geometry.Point{X: 9999, Y: 9999},
 		ProcessName: "OUTLOOK.EXE",
+		IsClick:     true,
 	})
 
 	return batch

@@ -1,6 +1,7 @@
 package mapper
 
 import (
+	"strings"
 	"time"
 
 	"assessment/modules/libs/domain/display"
@@ -94,7 +95,58 @@ func ToDomainMouseEvent(m *v1.MouseEvent) events.MouseEvent {
 		ClickCount:  m.GetClickCount(),
 		WindowTitle: m.GetWindowTitle(),
 		ProcessName: m.GetProcessName(),
+		IsClick:     IsClickEvent(m.GetAction(), m.GetButton(), m.GetClickCount()),
 	}
+}
+
+// IsClickEvent determines whether raw mouse event attributes represent a primary click event.
+func IsClickEvent(action, button, clickCount string) bool {
+	act := strings.ToLower(strings.TrimSpace(action))
+	if isGestureAction(act) {
+		return false
+	}
+
+	btn := strings.ToLower(strings.TrimSpace(button))
+	if btn == "middle" || btn == "right" {
+		return false
+	}
+
+	return isClickAction(act) || isPrimaryButton(btn) || hasClickCount(clickCount)
+}
+
+func isGestureAction(act string) bool {
+	switch act {
+	case "move", "mousemove", "drag", "mousedrag", "scroll", "mousescroll", "up", "mouseup", "release":
+		return true
+	default:
+		return false
+	}
+}
+
+func isPrimaryButton(btn string) bool {
+	switch btn {
+	case "left", "primary", "main":
+		return true
+	default:
+		return false
+	}
+}
+
+func isClickAction(act string) bool {
+	switch act {
+	case "click", "mousedown", "mouse_click":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasClickCount(clickCount string) bool {
+	if clickCount == "" {
+		return false
+	}
+	cc := strings.ToLower(strings.TrimSpace(clickCount))
+	return cc != "" && cc != "none" && cc != "0"
 }
 
 // ToDomainClipboardEvent maps a Protobuf ClipboardEvent to domain ClipboardEvent.

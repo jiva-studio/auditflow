@@ -61,7 +61,7 @@ func (e WindowEvent) GetTimestamp() time.Time { return e.Timestamp }
 // GetType returns EventTypeWindow.
 func (e WindowEvent) GetType() EventType { return EventTypeWindow }
 
-// MouseEvent represents a mouse click event.
+// MouseEvent represents a mouse activity event.
 type MouseEvent struct {
 	Timestamp   time.Time
 	Action      string // "click"
@@ -70,6 +70,7 @@ type MouseEvent struct {
 	ClickCount  string
 	WindowTitle string
 	ProcessName string
+	IsClick     bool
 }
 
 // GetTimestamp returns the event timestamp.

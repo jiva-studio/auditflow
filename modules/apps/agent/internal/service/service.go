@@ -164,7 +164,7 @@ func (s *Service) processEvent(ctx context.Context, ev events.Event) error {
 }
 
 func (s *Service) handleMouseEvent(ctx context.Context, m events.MouseEvent) error {
-	if !isClickEvent(m) {
+	if !m.IsClick {
 		return nil
 	}
 
@@ -208,53 +208,4 @@ func (s *Service) evaluateRulesAndDispatch(ctx context.Context, evalCtx rules.Ru
 		}
 	}
 	return nil
-}
-
-func isGestureAction(act string) bool {
-	switch act {
-	case "move", "mousemove", "drag", "mousedrag", "scroll", "mousescroll", "up", "mouseup", "release":
-		return true
-	default:
-		return false
-	}
-}
-
-func isPrimaryButton(btn string) bool {
-	switch btn {
-	case "left", "primary", "main":
-		return true
-	default:
-		return false
-	}
-}
-
-func isClickAction(act string) bool {
-	switch act {
-	case "click", "mousedown", "mouse_click":
-		return true
-	default:
-		return false
-	}
-}
-
-func hasClickCount(clickCount string) bool {
-	if clickCount == "" {
-		return false
-	}
-	cc := strings.ToLower(strings.TrimSpace(clickCount))
-	return cc != "" && cc != "none" && cc != "0"
-}
-
-func isClickEvent(m events.MouseEvent) bool {
-	act := strings.ToLower(strings.TrimSpace(m.Action))
-	if isGestureAction(act) {
-		return false
-	}
-
-	btn := strings.ToLower(strings.TrimSpace(m.Button))
-	if btn == "middle" || btn == "right" {
-		return false
-	}
-
-	return isClickAction(act) || isPrimaryButton(btn) || hasClickCount(m.ClickCount)
 }

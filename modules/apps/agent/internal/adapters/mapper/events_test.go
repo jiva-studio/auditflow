@@ -122,11 +122,78 @@ func TestToDomainEvent_Mouse(t *testing.T) {
 	}
 	ev := ToDomainEvent(pb)
 	mEv, ok := ev.(events.MouseEvent)
-	if !ok || mEv.Action != "click" || mEv.Position.X != 10 || mEv.Position.Y != 20 {
+	if !ok || mEv.Action != "click" || mEv.Position.X != 10 || mEv.Position.Y != 20 || !mEv.IsClick {
 		t.Errorf("unexpected mouse event: %+v", ev)
 	}
 	if nilMouse := ToDomainMouseEvent(nil); nilMouse.Action != "" {
 		t.Errorf("expected empty mouse event for nil")
+	}
+}
+
+func TestIsClickEvent(t *testing.T) {
+	tests := []struct {
+		name       string
+		action     string
+		button     string
+		clickCount string
+		expected   bool
+	}{
+		// Primary button clicks
+		{name: "standard left click", action: "click", button: "left", expected: true},
+		{name: "primary button click", action: "click", button: "primary", expected: true},
+		{name: "main button click", action: "click", button: "main", expected: true},
+		{name: "mousedown action", action: "mousedown", button: "primary", expected: true},
+		{name: "mouse_click action", action: "mouse_click", button: "primary", expected: true},
+		{name: "left button without action", button: "left", expected: true},
+		{name: "primary button without action", button: "primary", expected: true},
+		{name: "main button without action", button: "main", expected: true},
+		{name: "click action without button", action: "click", expected: true},
+		{name: "mousedown action without button", action: "mousedown", expected: true},
+		{name: "mouse_click action without button", action: "mouse_click", expected: true},
+		{name: "click count single", clickCount: "single", expected: true},
+		{name: "click count double", clickCount: "double", expected: true},
+		{name: "click count 1", clickCount: "1", expected: true},
+		{name: "case insensitive primary button", action: "CLICK", button: "PRIMARY", expected: true},
+
+		// Move & gesture rejections
+		{name: "move action rejected", action: "move", button: "primary", expected: false},
+		{name: "mousemove action rejected", action: "mousemove", button: "left", expected: false},
+		{name: "drag action rejected", action: "drag", button: "left", expected: false},
+		{name: "mousedrag action rejected", action: "mousedrag", button: "primary", expected: false},
+		{name: "scroll action rejected", action: "scroll", button: "primary", expected: false},
+		{name: "mousescroll action rejected", action: "mousescroll", button: "left", expected: false},
+		{name: "up action rejected", action: "up", button: "left", expected: false},
+		{name: "mouseup action rejected", action: "mouseup", button: "primary", expected: false},
+		{name: "release action rejected", action: "release", button: "main", expected: false},
+		{name: "move action with click count rejected", action: "move", clickCount: "single", expected: false},
+		{name: "drag action with primary button rejected", action: "drag", button: "primary", clickCount: "1", expected: false},
+
+		// Middle click rejections
+		{name: "middle click rejected", action: "click", button: "middle", expected: false},
+		{name: "middle mousedown rejected", action: "mousedown", button: "middle", expected: false},
+		{name: "middle mouse_click rejected", action: "mouse_click", button: "middle", expected: false},
+		{name: "middle button without action rejected", button: "middle", expected: false},
+
+		// Right click rejections
+		{name: "right click rejected", action: "click", button: "right", expected: false},
+		{name: "right mousedown rejected", action: "mousedown", button: "right", expected: false},
+		{name: "right mouse_click rejected", action: "mouse_click", button: "right", expected: false},
+		{name: "right button without action rejected", button: "right", expected: false},
+
+		// Click count zero / none rejections
+		{name: "empty event rejected", expected: false},
+		{name: "zero click count rejected", clickCount: "0", expected: false},
+		{name: "none click count rejected", clickCount: "none", expected: false},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			actual := IsClickEvent(tc.action, tc.button, tc.clickCount)
+			if actual != tc.expected {
+				t.Errorf("IsClickEvent(%q, %q, %q) = %v, want %v", tc.action, tc.button, tc.clickCount, actual, tc.expected)
+			}
+		})
 	}
 }
 
