@@ -402,3 +402,46 @@ func TestTarGzEventSource_LargeDataset_MemoryBounded(t *testing.T) {
 	allocDeltaMB := float64(mAfter.HeapAlloc-mBefore.HeapAlloc) / (1024 * 1024)
 	t.Logf("Stress test completed: %d ticks, %d events, HeapAlloc delta: %.2f MB", ticksReceived, eventsReceived, allocDeltaMB)
 }
+
+func TestTarGzEventSource_IdenticalTimestampsTieBreaker(t *testing.T) {
+	metaJSON := `{
+		"schema_version": "1.0.0",
+		"session_id": "sess-tie",
+		"employee_id": "emp-tie",
+		"started_at": "2026-03-10T10:00:00.000Z",
+		"ended_at": "2026-03-10T10:00:01.000Z",
+		"machine": {"displays": [{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0}]}
+	}`
+
+	// Exactly identical timestamps in different streams
+	const sameTS = "2026-03-10T10:00:00.500Z"
+	winJSONL := fmt.Sprintf(`{"ts": "%s", "event": "focus_change", "window_title": "W1", "process_name": "app.exe", "window_rect": [0, 0, 100, 100]}`+"\n", sameTS)
+	mouseJSONL := fmt.Sprintf(`{"ts": "%s", "event": "click", "button": "left", "mouse_x": 10, "mouse_y": 20}`+"\n", sameTS)
+	clipJSONL := fmt.Sprintf(`{"ts": "%s", "event": "clipboard_change", "clipboard_content_text": "text", "clipboard_content_length": 4}`+"\n", sameTS)
+
+	path := createTestTarGz(t, map[string]string{
+		"session/metadata.json":   metaJSON,
+		"session/windows.jsonl":   winJSONL,
+		"session/mouse.jsonl":     mouseJSONL,
+		"session/clipboard.jsonl": clipJSONL,
+	})
+
+	src := source.NewTarGzEventSource(path, nil)
+	tickCh, errCh, err := src.StreamTicks(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error starting stream: %v", err)
+	}
+
+	var totalEvents int
+	for tick := range tickCh {
+		totalEvents += tick.Len()
+	}
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("unexpected stream error: %v", err)
+	}
+
+	if totalEvents != 3 {
+		t.Errorf("got %d events, want 3", totalEvents)
+	}
+}
