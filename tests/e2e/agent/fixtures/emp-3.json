@@ -1,0 +1,20 @@
+{
+  "employee_id": "emp-3",
+  "total_popups": 2,
+  "popups": [
+    {
+      "employee": "emp-3",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T21:21:32Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-20417. Attach the invoice to this email?"
+    },
+    {
+      "employee": "emp-3",
+      "rule": "salesforce-record-deleted",
+      "ts": "2026-03-10T22:12:35Z",
+      "title": "Record deleted",
+      "body": "Deleted in Salesforce: 00482913 | Case | Salesforce - Google Chrome"
+    }
+  ]
+}

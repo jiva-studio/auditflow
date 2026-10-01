@@ -40,6 +40,26 @@ func GetStreamerBin(t *testing.T) string {
 	return filepath.Join(FindProjectRoot(t), "bin", "streamer")
 }
 
+// GetAgentBin returns the path to the compiled agent binary
+func GetAgentBin(t *testing.T) string {
+	t.Helper()
+	binPath := os.Getenv("AGENT_BIN")
+	if binPath != "" {
+		return binPath
+	}
+	return filepath.Join(FindProjectRoot(t), "bin", "agent")
+}
+
+// GetRulesPath returns the path to data/rules.json
+func GetRulesPath(t *testing.T) string {
+	t.Helper()
+	rulesPath := os.Getenv("RULES_PATH")
+	if rulesPath != "" {
+		return rulesPath
+	}
+	return filepath.Join(FindProjectRoot(t), "data", "rules.json")
+}
+
 // GetDataDir returns the path to real test recordings
 func GetDataDir(t *testing.T) string {
 	t.Helper()
@@ -65,6 +85,26 @@ func NewMockAgentServer(t *testing.T, onBatch func(body []byte)) *httptest.Serve
 		}
 		if onBatch != nil {
 			onBatch(body)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+}
+
+// NewMockCentralServer creates a test HTTP server receiving protobuf audit popups
+func NewMockCentralServer(t *testing.T, onPopup func(body []byte)) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/audit" || r.Header.Get("Content-Type") != "application/x-protobuf" {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if onPopup != nil {
+			onPopup(body)
 		}
 		w.WriteHeader(http.StatusOK)
 	}))

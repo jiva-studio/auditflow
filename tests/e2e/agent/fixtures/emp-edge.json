@@ -1,0 +1,48 @@
+{
+  "employee_id": "emp-edge",
+  "total_popups": 6,
+  "popups": [
+    {
+      "employee": "emp-edge",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T14:00:02Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Right Click Ignored"
+    },
+    {
+      "employee": "emp-edge",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T14:00:03Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Right Click Ignored"
+    },
+    {
+      "employee": "emp-edge",
+      "rule": "jira-ticket-done",
+      "ts": "2026-03-10T14:00:04Z",
+      "title": "Ticket moved to Done",
+      "body": "BACKLOG-100 - Jira - Chrome"
+    },
+    {
+      "employee": "emp-edge",
+      "rule": "jira-ticket-done",
+      "ts": "2026-03-10T14:00:04Z",
+      "title": "Ticket moved to Done",
+      "body": "BACKLOG-100 - Jira - Chrome"
+    },
+    {
+      "employee": "emp-edge",
+      "rule": "jira-ticket-done",
+      "ts": "2026-03-10T14:00:05Z",
+      "title": "Ticket moved to Done",
+      "body": "feature-99 - jira - edge"
+    },
+    {
+      "employee": "emp-edge",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T14:00:06Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-001122. Attach the invoice to this email?"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "employee_id": "emp-2",
+  "total_popups": 3,
+  "popups": [
+    {
+      "employee": "emp-2",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T16:05:25Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Q3 media plan - final"
+    },
+    {
+      "employee": "emp-2",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T16:38:31Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-20417. Attach the invoice to this email?"
+    },
+    {
+      "employee": "emp-2",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T16:39:13Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-20533. Attach the invoice to this email?"
+    }
+  ]
+}

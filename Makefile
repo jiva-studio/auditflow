@@ -106,5 +106,8 @@ streamer_mutate:
 streamer_e2e_test:
 	$(MAKE) -C tests/e2e/streamer test
 
-e2e_test: streamer_e2e_test
+agent_e2e_test:
+	$(MAKE) -C tests/e2e/agent test
+
+e2e_test: streamer_e2e_test agent_e2e_test
 

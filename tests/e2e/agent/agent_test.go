@@ -1,0 +1,189 @@
+package agent_test
+
+import (
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+	"syscall"
+	"testing"
+	"time"
+
+	"google.golang.org/protobuf/proto"
+
+	v1 "assessment/libs/protocol/gen/go/v1"
+	"assessment/tests/e2e/testutil"
+)
+
+type expectedPopup struct {
+	Employee string `json:"employee"`
+	Rule     string `json:"rule"`
+	TS       string `json:"ts"`
+	Title    string `json:"title"`
+	Body     string `json:"body"`
+}
+
+type agentFixture struct {
+	EmployeeID  string          `json:"employee_id"`
+	TotalPopups int             `json:"total_popups"`
+	Popups      []expectedPopup `json:"popups"`
+}
+
+func loadAgentFixture(t *testing.T, fixtureName string) agentFixture {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("fixtures", fixtureName))
+	if err != nil {
+		t.Fatalf("failed to read fixture %s: %v", fixtureName, err)
+	}
+	var f agentFixture
+	if err := json.Unmarshal(data, &f); err != nil {
+		t.Fatalf("failed to parse fixture %s: %v", fixtureName, err)
+	}
+	return f
+}
+
+func getFreePort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to find free port: %v", err)
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
+func waitForHealth(t *testing.T, url string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	client := &http.Client{Timeout: 200 * time.Millisecond}
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(url + "/health")
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("agent at %s failed to become healthy within %v", url, timeout)
+}
+
+func startAgent(t *testing.T, binPath, rulesPath, serverURL, employeeID string, port int) *exec.Cmd {
+	t.Helper()
+	cmd := exec.Command(binPath)
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("PORT=%d", port),
+		"RULES_PATH="+rulesPath,
+		"SERVER_URL="+serverURL,
+		"EMPLOYEE_ID="+employeeID,
+		"SERVER_TIMEOUT_MS=5000",
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start agent process: %v", err)
+	}
+	return cmd
+}
+
+func stopAgent(t *testing.T, cmd *exec.Cmd) {
+	t.Helper()
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	_ = cmd.Process.Signal(syscall.SIGTERM)
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		_ = cmd.Process.Kill()
+	}
+}
+
+func TestAgent_E2E_AllEmployees(t *testing.T) {
+	agentBin := testutil.GetAgentBin(t)
+	streamerBin := testutil.GetStreamerBin(t)
+	rulesPath := testutil.GetRulesPath(t)
+	dataDir := testutil.GetDataDir(t)
+
+	employees := []string{"emp-1", "emp-2", "emp-3", "emp-synthetic", "emp-edge"}
+
+	for _, empID := range employees {
+		empID := empID
+		t.Run(empID, func(t *testing.T) {
+			archivePath := filepath.Join(dataDir, empID+".tar.gz")
+			if _, err := os.Stat(archivePath); os.IsNotExist(err) {
+				t.Skipf("recording %s not found, skipping", archivePath)
+			}
+
+			fixture := loadAgentFixture(t, empID+".json")
+
+			var mu sync.Mutex
+			var receivedPopups []*v1.Popup
+
+			mockServer := testutil.NewMockCentralServer(t, func(body []byte) {
+				var p v1.Popup
+				if err := proto.Unmarshal(body, &p); err == nil {
+					mu.Lock()
+					receivedPopups = append(receivedPopups, &p)
+					mu.Unlock()
+				}
+			})
+			defer mockServer.Close()
+
+			port := getFreePort(t)
+			agentURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+			agentCmd := startAgent(t, agentBin, rulesPath, mockServer.URL, empID, port)
+			defer stopAgent(t, agentCmd)
+
+			waitForHealth(t, agentURL, 5*time.Second)
+
+			out, err := testutil.RunStreamer(t, streamerBin, archivePath, agentURL)
+			if err != nil {
+				t.Fatalf("streamer replay failed: %v, output:\n%s", err, string(out))
+			}
+
+			time.Sleep(200 * time.Millisecond)
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			t.Logf("[%s] received %d popups:", empID, len(receivedPopups))
+			for i, p := range receivedPopups {
+				t.Logf("  popup #%d: rule=%s, ts=%s, title=%q, body=%q",
+					i+1, p.GetRule(), p.GetTs().AsTime().Format(time.RFC3339), p.GetTitle(), p.GetBody())
+			}
+
+			if len(receivedPopups) != fixture.TotalPopups {
+				t.Fatalf("[%s] expected %d popups, got %d", empID, fixture.TotalPopups, len(receivedPopups))
+			}
+
+			for i, exp := range fixture.Popups {
+				act := receivedPopups[i]
+				if act.GetEmployee() != exp.Employee {
+					t.Errorf("popup #%d employee mismatch: got %s, want %s", i+1, act.GetEmployee(), exp.Employee)
+				}
+				if act.GetRule() != exp.Rule {
+					t.Errorf("popup #%d rule mismatch: got %s, want %s", i+1, act.GetRule(), exp.Rule)
+				}
+				if act.GetTitle() != exp.Title {
+					t.Errorf("popup #%d title mismatch: got %q, want %q", i+1, act.GetTitle(), exp.Title)
+				}
+				if act.GetBody() != exp.Body {
+					t.Errorf("popup #%d body mismatch: got %q, want %q", i+1, act.GetBody(), exp.Body)
+				}
+				if act.GetTs().AsTime().Format(time.RFC3339) != exp.TS {
+					t.Errorf("popup #%d ts mismatch: got %s, want %s", i+1, act.GetTs().AsTime().Format(time.RFC3339), exp.TS)
+				}
+			}
+		})
+	}
+}

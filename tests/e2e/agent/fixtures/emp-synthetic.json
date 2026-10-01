@@ -1,0 +1,62 @@
+{
+  "employee_id": "emp-synthetic",
+  "total_popups": 8,
+  "popups": [
+    {
+      "employee": "emp-synthetic",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T12:00:01Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Q3 Marketing Plan"
+    },
+    {
+      "employee": "emp-synthetic",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T12:00:02Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Urgent Security Notice"
+    },
+    {
+      "employee": "emp-synthetic",
+      "rule": "urgent-email-opened",
+      "ts": "2026-03-10T12:00:02Z",
+      "title": "Urgent email",
+      "body": "FW: Urgent Security Notice"
+    },
+    {
+      "employee": "emp-synthetic",
+      "rule": "salesforce-record-deleted",
+      "ts": "2026-03-10T12:00:04Z",
+      "title": "Record deleted",
+      "body": "Deleted in Salesforce: 0054321 | Case | Salesforce - Google Chrome"
+    },
+    {
+      "employee": "emp-synthetic",
+      "rule": "jira-ticket-done",
+      "ts": "2026-03-10T12:00:06Z",
+      "title": "Ticket moved to Done",
+      "body": "DEV-909 - Jira - Mozilla Firefox"
+    },
+    {
+      "employee": "emp-synthetic",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T12:00:07Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-55443. Attach the invoice to this email?"
+    },
+    {
+      "employee": "emp-synthetic",
+      "rule": "invoice-ready-to-attach",
+      "ts": "2026-03-10T12:00:08Z",
+      "title": "Invoice in clipboard",
+      "body": "You copied INV-88990. Attach the invoice to this email?"
+    },
+    {
+      "employee": "emp-synthetic",
+      "rule": "forwarded-email-opened",
+      "ts": "2026-03-10T12:00:09Z",
+      "title": "Forwarded email",
+      "body": "You opened a forwarded email: FW: Multi-Display Project Plan"
+    }
+  ]
+}
