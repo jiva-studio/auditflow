@@ -10,3 +10,6 @@ bin/
 .vscode/
 # Documents
 *.pdf
+
+# Worktrees
+.worktrees/
