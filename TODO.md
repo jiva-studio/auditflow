@@ -18,10 +18,10 @@ flowchart TD
         Agent --> Sanitizer["🛡️ PII Masking"]
     end
     
-    MDM["📦 Corporate MDM (Intune / Jamf)"] -.->|"Zero-Touch Token"| Agent
-    Employee["👤 Employee"] -.->|"SSO Login / Magic Link"| Agent
+    MDM["📦 Corporate MDM (Intune / Jamf)"] -.->|"Enrollment"| Agent
+    Employee["👤 Employee"] -.->|"SSO Login"| Agent
     
-    Sanitizer -->|"mTLS / Device Token"| LB["🌐 Load Balancer"]
+    Sanitizer -->|"Protobuf"| LB["🌐 Load Balancer"]
     LB --> Ingest["🚀 Ingestion Gateways"]
     Ingest -->|"Partition: employee_id"| Broker[("📦 Message Broker")]
     
