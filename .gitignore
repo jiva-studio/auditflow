@@ -8,5 +8,5 @@ bin/
 .DS_Store
 .idea/
 .vscode/
-
-
+# Documents
+*.pdf
