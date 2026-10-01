@@ -113,7 +113,7 @@ func TestAgent_E2E_AllEmployees(t *testing.T) {
 	rulesPath := testutil.GetRulesPath(t)
 	dataDir := testutil.GetDataDir(t)
 
-	employees := []string{"emp-1", "emp-2", "emp-3", "emp-synthetic", "emp-edge", "emp-multidisplay", "emp-quadhd", "emp-lefthand", "emp-placeholders", "emp-clickprocess"}
+	employees := []string{"emp-1", "emp-2", "emp-3", "emp-synthetic", "emp-edge", "emp-multidisplay", "emp-quadhd", "emp-lefthand", "emp-placeholders", "emp-clickprocess", "emp-contextreset"}
 
 	for _, empID := range employees {
 		empID := empID
@@ -437,6 +437,76 @@ func TestAgent_E2E_ClickProcessContext(t *testing.T) {
 		}
 		if act.GetBody() != exp.Body {
 			t.Errorf("popup #%d body mismatch: got %q, want %q", i+1, act.GetBody(), exp.Body)
+		}
+	}
+}
+
+func TestAgent_E2E_ContextReset(t *testing.T) {
+	agentBin := testutil.GetAgentBin(t)
+	streamerBin := testutil.GetStreamerBin(t)
+	rulesPath := testutil.GetRulesPath(t)
+
+	empID := "emp-context-reset"
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "context_reset.tar.gz")
+
+	if err := testutil.GenerateContextResetRecording(t, archivePath, empID); err != nil {
+		t.Fatalf("failed to generate context reset recording: %v", err)
+	}
+
+	var mu sync.Mutex
+	var receivedPopups []*v1.Popup
+
+	mockServer := testutil.NewMockCentralServer(t, func(body []byte) {
+		var p v1.Popup
+		if err := proto.Unmarshal(body, &p); err == nil {
+			mu.Lock()
+			receivedPopups = append(receivedPopups, &p)
+			mu.Unlock()
+		}
+	})
+	defer mockServer.Close()
+
+	port := getFreePort(t)
+	agentURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	agentCmd := startAgent(t, agentBin, rulesPath, mockServer.URL, empID, port)
+	defer stopAgent(t, agentCmd)
+
+	waitForHealth(t, agentURL, 5*time.Second)
+
+	out, err := testutil.RunStreamer(t, streamerBin, archivePath, agentURL)
+	if err != nil {
+		t.Fatalf("streamer replay failed: %v, output:\n%s", err, string(out))
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	t.Logf("[%s] received %d popups:", empID, len(receivedPopups))
+	for i, p := range receivedPopups {
+		t.Logf("  popup #%d: rule=%s, ts=%s, title=%q, body=%q",
+			i+1, p.GetRule(), p.GetTs().AsTime().Format(time.RFC3339), p.GetTitle(), p.GetBody())
+	}
+
+	if len(receivedPopups) != 3 {
+		t.Fatalf("[%s] expected 3 popups across context resets, got %d", empID, len(receivedPopups))
+	}
+
+	for i, p := range receivedPopups {
+		if p.GetEmployee() != empID {
+			t.Errorf("popup #%d employee mismatch: got %s, want %s", i+1, p.GetEmployee(), empID)
+		}
+		if p.GetRule() != "invoice-ready-to-attach" {
+			t.Errorf("popup #%d rule mismatch: got %s, want invoice-ready-to-attach", i+1, p.GetRule())
+		}
+		if p.GetTitle() != "Invoice in clipboard" {
+			t.Errorf("popup #%d title mismatch: got %q, want %q", i+1, p.GetTitle(), "Invoice in clipboard")
+		}
+		if p.GetBody() != "You copied INV-100. Attach the invoice to this email?" {
+			t.Errorf("popup #%d body mismatch: got %q, want %q", i+1, p.GetBody(), "You copied INV-100. Attach the invoice to this email?")
 		}
 	}
 }

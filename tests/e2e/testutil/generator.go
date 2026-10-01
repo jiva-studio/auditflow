@@ -429,3 +429,90 @@ func GenerateClickProcessContextRecording(t *testing.T, targetPath, employeeID s
 	}
 	return fi.Size(), nil
 }
+
+// GenerateContextResetRecording creates a targeted .tar.gz recording on disk
+// demonstrating context transitions (clipboard cycling) to verify deduplication reset.
+func GenerateContextResetRecording(t *testing.T, targetPath, employeeID string) error {
+	t.Helper()
+
+	f, err := os.Create(targetPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	gzw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gzw)
+
+	startTime := time.Date(2026, 3, 10, 10, 0, 0, 0, time.UTC)
+	endTime := startTime.Add(10 * time.Second)
+
+	metaJSON := fmt.Sprintf(`{
+		"schema_version": "1.0.0",
+		"session_id": "sess-context-reset",
+		"employee_id": "%s",
+		"started_at": "%s",
+		"ended_at": "%s",
+		"machine": {
+			"hostname": "RESET-HOST",
+			"os_version": "Linux 6.6",
+			"displays": [
+				{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0, "primary": true}
+			]
+		}
+	}`, employeeID, startTime.Format(time.RFC3339Nano), endTime.Format(time.RFC3339Nano))
+
+	if err := writeTarEntry(tw, "session/metadata.json", []byte(metaJSON)); err != nil {
+		return err
+	}
+
+	t0_5 := startTime.Add(500 * time.Millisecond).Format(time.RFC3339Nano)
+
+	windowsJSONL := fmt.Sprintf(
+		`{"ts":"%s","event":"focus_change","window_title":"Inbox - Outlook","process_name":"OUTLOOK.EXE","window_rect":[0,0,1920,1080]}`+"\n",
+		t0_5,
+	)
+	if err := writeTarEntry(tw, "session/windows.jsonl", []byte(windowsJSONL)); err != nil {
+		return err
+	}
+
+	t1_5 := startTime.Add(1500 * time.Millisecond).Format(time.RFC3339Nano)
+	t2_5 := startTime.Add(2500 * time.Millisecond).Format(time.RFC3339Nano)
+	t3_0 := startTime.Add(3000 * time.Millisecond).Format(time.RFC3339Nano)
+	t3_5 := startTime.Add(3500 * time.Millisecond).Format(time.RFC3339Nano)
+	t4_5 := startTime.Add(4500 * time.Millisecond).Format(time.RFC3339Nano)
+	t5_5 := startTime.Add(5500 * time.Millisecond).Format(time.RFC3339Nano)
+	t6_5 := startTime.Add(6500 * time.Millisecond).Format(time.RFC3339Nano)
+
+	clipJSONL := fmt.Sprintf(
+		`{"ts":"%s","event":"clipboard_change","clipboard_content_text":"INV-100","clipboard_content_length":7}`+"\n"+
+			`{"ts":"%s","event":"clipboard_change","clipboard_content_text":"INV-100","clipboard_content_length":7}`+"\n"+
+			`{"ts":"%s","event":"clipboard_change","clipboard_content_text":"regular text","clipboard_content_length":12}`+"\n"+
+			`{"ts":"%s","event":"clipboard_change","clipboard_content_text":"INV-100","clipboard_content_length":7}`+"\n"+
+			`{"ts":"%s","event":"clipboard_change","clipboard_content_text":"other note","clipboard_content_length":10}`+"\n"+
+			`{"ts":"%s","event":"clipboard_change","clipboard_content_text":"INV-100","clipboard_content_length":7}`+"\n"+
+			`{"ts":"%s","event":"clipboard_change","clipboard_content_text":"INV-100","clipboard_content_length":7}`+"\n",
+		t1_5, t2_5, t3_0, t3_5, t4_5, t5_5, t6_5,
+	)
+	if err := writeTarEntry(tw, "session/clipboard.jsonl", []byte(clipJSONL)); err != nil {
+		return err
+	}
+
+	emptyStreams := []string{
+		"session/mouse.jsonl",
+		"session/keyboard.jsonl",
+		"session/ocr.jsonl",
+	}
+	for _, st := range emptyStreams {
+		if err := writeTarEntry(tw, st, []byte{}); err != nil {
+			return err
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	return gzw.Close()
+}
