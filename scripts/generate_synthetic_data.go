@@ -599,6 +599,113 @@ func generateClickProcessArchive(targetPath string) error {
 	return gzw.Close()
 }
 
+func generateBoundarySyncArchive(targetPath string) error {
+	f, err := os.Create(targetPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	gzw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gzw)
+
+	startTime := time.Date(2026, 3, 10, 10, 0, 0, 0, time.UTC)
+	endTime := startTime.Add(5 * time.Second)
+
+	metaJSON := fmt.Sprintf(`{
+		"schema_version": "1.0.0",
+		"session_id": "sess-boundary-sync",
+		"employee_id": "emp-boundary-sync",
+		"started_at": "%s",
+		"ended_at": "%s",
+		"machine": {
+			"hostname": "TEST-DESKTOP-BOUNDARY",
+			"os_version": "Windows 11 Pro",
+			"displays": [
+				{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0, "primary": true}
+			]
+		}
+	}`, startTime.Format(time.RFC3339Nano), endTime.Format(time.RFC3339Nano))
+
+	if err := writeTarFile(tw, "session/metadata.json", []byte(metaJSON)); err != nil {
+		return err
+	}
+
+	// 1. Pre-roll events before started_at
+	ts_preroll_win := startTime.Add(-2 * time.Second).Format(time.RFC3339Nano)
+	ts_preroll_ocr := startTime.Add(-1 * time.Second).Format(time.RFC3339Nano)
+
+	win_preroll := fmt.Sprintf(`{"ts":"%s","event":"focus_change","window_title":"Inbox - Outlook","process_name":"OUTLOOK.EXE","window_rect":[0,0,1920,1080]}`+"\n", ts_preroll_win)
+	ocr_preroll := fmt.Sprintf(`{"ts":"%s","filename":"preroll.jpg","display_id":0,"resolution":[1920,1080],"ocr_text_blocks":[{"text":"FW: Pre-roll Invoice Review","bounding_box":[100,200,300,40],"confidence":1.0},{"text":"مرحبا بالعالم 🔥🚀","bounding_box":[-10,-10,50,50],"confidence":0.9}]}`+"\n", ts_preroll_ocr)
+
+	// 2. Tick 0 (at exact boundary 10:00:00.000Z)
+	ts0_click := startTime.Format(time.RFC3339Nano)
+	mouse0 := fmt.Sprintf(`{"ts":"%s","event":"click","button":"left","mouse_x":150,"mouse_y":220,"click_count":"single"}`+"\n", ts0_click)
+
+	// 3. Tick 1 (10:00:01.000Z) - clipboard change
+	ts1_clip := startTime.Add(1 * time.Second).Format(time.RFC3339Nano)
+	clip1 := fmt.Sprintf(`{"ts":"%s","event":"clipboard_change","clipboard_content_text":"INV-554433","clipboard_content_length":10}`+"\n", ts1_clip)
+
+	// 4. Tick 2 (10:00:02.000Z) - Jira ticket done
+	ts2_win := startTime.Add(2 * time.Second).Format(time.RFC3339Nano)
+	ts2_ocr := startTime.Add(2*time.Second + 100*time.Millisecond).Format(time.RFC3339Nano)
+	ts2_click := startTime.Add(2*time.Second + 500*time.Millisecond).Format(time.RFC3339Nano)
+	win2 := fmt.Sprintf(`{"ts":"%s","event":"focus_change","window_title":"DEV-1234 - Jira - Chrome","process_name":"chrome.exe","window_rect":[0,0,1920,1080]}`+"\n", ts2_win)
+	ocr2 := fmt.Sprintf(`{"ts":"%s","filename":"s2.jpg","display_id":0,"resolution":[1920,1080],"ocr_text_blocks":[{"text":"Done","bounding_box":[400,300,80,30],"confidence":1.0}]}`+"\n", ts2_ocr)
+	mouse2 := fmt.Sprintf(`{"ts":"%s","event":"click","button":"left","mouse_x":420,"mouse_y":310,"click_count":"single"}`+"\n", ts2_click)
+
+	// 5. Tick 3 (10:00:03.000Z) - Salesforce delete
+	ts3_win := startTime.Add(3 * time.Second).Format(time.RFC3339Nano)
+	ts3_ocr := startTime.Add(3*time.Second + 100*time.Millisecond).Format(time.RFC3339Nano)
+	ts3_click := startTime.Add(3*time.Second + 500*time.Millisecond).Format(time.RFC3339Nano)
+	win3 := fmt.Sprintf(`{"ts":"%s","event":"focus_change","window_title":"0098765 | Case | Salesforce - Chrome","process_name":"chrome.exe","window_rect":[0,0,1920,1080]}`+"\n", ts3_win)
+	ocr3 := fmt.Sprintf(`{"ts":"%s","filename":"s3.jpg","display_id":0,"resolution":[1920,1080],"ocr_text_blocks":[{"text":"Are you sure you want to delete this case?","bounding_box":[50,50,500,40],"confidence":1.0},{"text":"Delete","bounding_box":[200,500,80,30],"confidence":1.0}]}`+"\n", ts3_ocr)
+	mouse3 := fmt.Sprintf(`{"ts":"%s","event":"click","button":"left","mouse_x":220,"mouse_y":510,"click_count":"single"}`+"\n", ts3_click)
+
+	// 6. Tick 4 (10:00:04.000Z) - Generic activities & template string adversary
+	ts4_key := startTime.Add(4*time.Second + 100*time.Millisecond).Format(time.RFC3339Nano)
+	ts4_scroll := startTime.Add(4*time.Second + 200*time.Millisecond).Format(time.RFC3339Nano)
+	key4 := fmt.Sprintf(`{"ts":"%s","event":"key_press","text":"{clipboard}{click}{ocr}{window_title}"}`+"\n", ts4_key)
+	scroll4 := fmt.Sprintf(`{"ts":"%s","delta":120}`+"\n", ts4_scroll)
+
+	// 7. Trailing events at/after ended_at (10:00:05.000Z)
+	ts5_win := startTime.Add(5 * time.Second).Format(time.RFC3339Nano)
+	ts5_clip := startTime.Add(5*time.Second + 100*time.Millisecond).Format(time.RFC3339Nano)
+	win5 := fmt.Sprintf(`{"ts":"%s","event":"focus_change","window_title":"Inbox - Outlook","process_name":"OUTLOOK.EXE","window_rect":[0,0,1920,1080]}`+"\n", ts5_win)
+	clip5 := fmt.Sprintf(`{"ts":"%s","event":"clipboard_change","clipboard_content_text":"INV-990011","clipboard_content_length":10}`+"\n", ts5_clip)
+
+	ocrContent := ocr_preroll + ocr2 + ocr3
+	winContent := win_preroll + win2 + win3 + win5
+	mouseContent := mouse0 + mouse2 + mouse3
+	clipContent := clip1 + clip5
+	keyContent := key4
+	scrollContent := scroll4
+
+	if err := writeTarFile(tw, "session/ocr.jsonl", []byte(ocrContent)); err != nil {
+		return err
+	}
+	if err := writeTarFile(tw, "session/windows.jsonl", []byte(winContent)); err != nil {
+		return err
+	}
+	if err := writeTarFile(tw, "session/mouse.jsonl", []byte(mouseContent)); err != nil {
+		return err
+	}
+	if err := writeTarFile(tw, "session/clipboard.jsonl", []byte(clipContent)); err != nil {
+		return err
+	}
+	if err := writeTarFile(tw, "session/keyboard.jsonl", []byte(keyContent)); err != nil {
+		return err
+	}
+	if err := writeTarFile(tw, "session/mouse_scroll.jsonl", []byte(scrollContent)); err != nil {
+		return err
+	}
+
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	return gzw.Close()
+}
+
 func main() {
 	rootDir := "data"
 	if err := os.MkdirAll(rootDir, 0755); err != nil {
@@ -640,4 +747,10 @@ func main() {
 		log.Fatalf("failed to generate clickprocess archive: %v", err)
 	}
 	log.Printf("Generated %s successfully", clickProcessPath)
+
+	syncPath := filepath.Join(rootDir, "emp-boundary-sync.tar.gz")
+	if err := generateBoundarySyncArchive(syncPath); err != nil {
+		log.Fatalf("failed to generate boundary sync archive: %v", err)
+	}
+	log.Printf("Generated %s successfully", syncPath)
 }

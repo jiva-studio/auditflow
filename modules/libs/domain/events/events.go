@@ -154,8 +154,14 @@ func (b *TickBatch) Add(event Event) error {
 		return ErrNilEvent
 	}
 	ts := event.GetTimestamp()
-	if ts.Before(b.StartTime) || !ts.Before(b.EndTime) {
-		return fmt.Errorf("event timestamp %v outside [%v, %v): %w", ts, b.StartTime, b.EndTime, ErrEventOutOfBounds)
+	if b.TickIndex == 0 {
+		if !ts.Before(b.EndTime) {
+			return fmt.Errorf("event timestamp %v outside [-, %v): %w", ts, b.EndTime, ErrEventOutOfBounds)
+		}
+	} else {
+		if ts.Before(b.StartTime) || !ts.Before(b.EndTime) {
+			return fmt.Errorf("event timestamp %v outside [%v, %v): %w", ts, b.StartTime, b.EndTime, ErrEventOutOfBounds)
+		}
 	}
 
 	idx := sort.Search(len(b.events), func(i int) bool {

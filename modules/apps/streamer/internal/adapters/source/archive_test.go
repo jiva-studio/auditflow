@@ -14,6 +14,7 @@ import (
 
 	"assessment/modules/apps/streamer/internal/adapters/reporter"
 	"assessment/modules/apps/streamer/internal/adapters/source"
+	"assessment/modules/libs/domain/events"
 )
 
 func createTestTarGz(t *testing.T, files map[string]string) string {
@@ -214,8 +215,169 @@ func TestTarGzEventSource_StreamTicks_AllEventTypes(t *testing.T) {
 	if len(receivedTicks) != 5 {
 		t.Errorf("got %d ticks, want 5", len(receivedTicks))
 	}
-	if totalEvents != 8 {
-		t.Errorf("got %d total events, want 8", totalEvents)
+	if totalEvents != 9 {
+		t.Errorf("got %d total events, want 9", totalEvents)
+	}
+}
+
+func TestTarGzEventSource_PreRollInitialization(t *testing.T) {
+	metaJSON := `{
+		"schema_version": "1.0.0",
+		"session_id": "sess-preroll",
+		"employee_id": "emp-preroll",
+		"started_at": "2026-03-10T10:00:00Z",
+		"ended_at": "2026-03-10T10:00:02Z",
+		"machine": {
+			"hostname": "HOST-PREROLL",
+			"os_version": "Windows 11",
+			"displays": [{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0, "primary": true}]
+		}
+	}`
+
+	windowsJSONL := `{"ts": "2026-03-10T09:59:58.000Z", "event": "focus_change", "window_title": "Desktop Start", "process_name": "explorer.exe", "window_rect": [0, 0, 1920, 1080]}
+{"ts": "2026-03-10T10:00:00.500Z", "event": "focus_change", "window_title": "Outlook", "process_name": "OUTLOOK.EXE", "window_rect": [0, 0, 1920, 1080]}`
+
+	ocrJSONL := `{"ts": "2026-03-10T09:59:59.000Z", "filename": "init.jpg", "display_id": 0, "resolution": [1920, 1080], "display_scale_factor": 1.0, "window_rect": [0, 0, 1920, 1080], "ocr_text_blocks": [{"text": "Welcome", "bounding_box": [0, 0, 100, 50], "confidence": 0.99}], "deduplicated_from": ""}`
+
+	path := createTestTarGz(t, map[string]string{
+		"session/metadata.json": metaJSON,
+		"session/windows.jsonl": windowsJSONL,
+		"session/ocr.jsonl":     ocrJSONL,
+	})
+
+	src := source.NewTarGzEventSource(path, nil)
+	tickCh, errCh, err := src.StreamTicks(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected stream start error: %v", err)
+	}
+
+	var batches []events.TickBatch
+	for tick := range tickCh {
+		batches = append(batches, tick)
+	}
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("unexpected stream error: %v", err)
+	}
+
+	if len(batches) != 2 {
+		t.Fatalf("got %d batches, want 2", len(batches))
+	}
+
+	tick0 := batches[0]
+	if tick0.Len() != 3 {
+		t.Fatalf("tick 0 length got %d, want 3", tick0.Len())
+	}
+
+	evs := tick0.Events()
+	if evs[0].GetType() != events.EventTypeWindow {
+		t.Errorf("expected first event to be WindowEvent, got %v", evs[0].GetType())
+	}
+	if evs[1].GetType() != events.EventTypeOCR {
+		t.Errorf("expected second event to be OCREvent, got %v", evs[1].GetType())
+	}
+	if evs[2].GetType() != events.EventTypeWindow {
+		t.Errorf("expected third event to be WindowEvent, got %v", evs[2].GetType())
+	}
+}
+
+func TestTarGzEventSource_TrailingSessionEvents(t *testing.T) {
+	metaJSON := `{
+		"schema_version": "1.0.0",
+		"session_id": "sess-trailing",
+		"employee_id": "emp-trailing",
+		"started_at": "2026-03-10T10:00:00Z",
+		"ended_at": "2026-03-10T10:00:02Z",
+		"machine": {
+			"hostname": "HOST-1",
+			"os_version": "Windows 11",
+			"displays": [{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0, "primary": true}]
+		}
+	}`
+
+	windowsJSONL := `{"ts": "2026-03-10T10:00:00.500Z", "event": "focus_change", "window_title": "Outlook", "process_name": "OUTLOOK.EXE", "window_rect": [0, 0, 1920, 1080]}
+{"ts": "2026-03-10T10:00:02.000Z", "event": "focus_change", "window_title": "Trailing 1", "process_name": "app.exe", "window_rect": [0, 0, 1920, 1080]}
+{"ts": "2026-03-10T10:00:02.500Z", "event": "focus_change", "window_title": "Trailing 2", "process_name": "app.exe", "window_rect": [0, 0, 1920, 1080]}`
+
+	path := createTestTarGz(t, map[string]string{
+		"session/metadata.json": metaJSON,
+		"session/windows.jsonl": windowsJSONL,
+	})
+
+	src := source.NewTarGzEventSource(path, nil)
+	tickCh, errCh, err := src.StreamTicks(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected stream start error: %v", err)
+	}
+
+	var batches []events.TickBatch
+	for tick := range tickCh {
+		batches = append(batches, tick)
+	}
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("unexpected stream error: %v", err)
+	}
+
+	if len(batches) != 3 {
+		t.Fatalf("got %d batches, want 3", len(batches))
+	}
+
+	finalBatch := batches[2]
+	if finalBatch.TickIndex != 2 {
+		t.Errorf("got final tick index %d, want 2", finalBatch.TickIndex)
+	}
+	if finalBatch.Len() != 2 {
+		t.Fatalf("got %d events in final batch, want 2", finalBatch.Len())
+	}
+}
+
+func TestTarGzEventSource_BoundaryTimestamps(t *testing.T) {
+	metaJSON := `{
+		"schema_version": "1.0.0",
+		"session_id": "sess-boundary",
+		"employee_id": "emp-boundary",
+		"started_at": "2026-03-10T10:00:00Z",
+		"ended_at": "2026-03-10T10:00:02Z",
+		"machine": {
+			"hostname": "HOST-1",
+			"os_version": "Windows 11",
+			"displays": [{"id": 0, "bounds": [0, 0, 1920, 1080], "scale": 1.0, "primary": true}]
+		}
+	}`
+
+	windowsJSONL := `{"ts": "2026-03-10T10:00:00.000Z", "event": "focus_change", "window_title": "Tick 0 Exact Start", "process_name": "app.exe", "window_rect": [0, 0, 100, 100]}
+{"ts": "2026-03-10T10:00:01.000Z", "event": "focus_change", "window_title": "Tick 1 Exact Start", "process_name": "app.exe", "window_rect": [0, 0, 100, 100]}`
+
+	path := createTestTarGz(t, map[string]string{
+		"session/metadata.json": metaJSON,
+		"session/windows.jsonl": windowsJSONL,
+	})
+
+	src := source.NewTarGzEventSource(path, nil)
+	tickCh, errCh, err := src.StreamTicks(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected stream start error: %v", err)
+	}
+
+	var batches []events.TickBatch
+	for tick := range tickCh {
+		batches = append(batches, tick)
+	}
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("unexpected stream error: %v", err)
+	}
+
+	if len(batches) != 2 {
+		t.Fatalf("got %d batches, want 2", len(batches))
+	}
+
+	if batches[0].Len() != 1 || batches[0].Events()[0].(events.WindowEvent).WindowTitle != "Tick 0 Exact Start" {
+		t.Errorf("unexpected batch 0: %+v", batches[0])
+	}
+	if batches[1].Len() != 1 || batches[1].Events()[0].(events.WindowEvent).WindowTitle != "Tick 1 Exact Start" {
+		t.Errorf("unexpected batch 1: %+v", batches[1])
 	}
 }
 

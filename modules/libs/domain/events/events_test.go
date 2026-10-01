@@ -138,7 +138,7 @@ func TestTickBatch_BoundaryErrors(t *testing.T) {
 	start := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
 	end := start.Add(1 * time.Second)
 
-	batch, err := events.NewTickBatch(0, start, end)
+	batch, err := events.NewTickBatch(1, start, end)
 	if err != nil {
 		t.Fatalf("failed to create batch: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestTickBatch_BoundaryErrors(t *testing.T) {
 		t.Fatalf("expected ErrNilEvent, got %v", err)
 	}
 
-	// Event before start
+	// Event before start on tick > 0
 	evBefore := events.WindowEvent{Timestamp: start.Add(-1 * time.Millisecond)}
 	if err := batch.Add(evBefore); !errors.Is(err, events.ErrEventOutOfBounds) {
 		t.Fatalf("expected ErrEventOutOfBounds for before start, got %v", err)
@@ -170,5 +170,17 @@ func TestTickBatch_BoundaryErrors(t *testing.T) {
 	evAtStart := events.WindowEvent{Timestamp: start}
 	if err := batch.Add(evAtStart); err != nil {
 		t.Fatalf("expected event at start to succeed, got %v", err)
+	}
+
+	// Tick 0 allows pre-roll (event before start)
+	batch0, err := events.NewTickBatch(0, start, end)
+	if err != nil {
+		t.Fatalf("failed to create batch 0: %v", err)
+	}
+	if err := batch0.Add(evBefore); err != nil {
+		t.Fatalf("expected pre-roll event in tick 0 to succeed, got %v", err)
+	}
+	if err := batch0.Add(evAtEnd); !errors.Is(err, events.ErrEventOutOfBounds) {
+		t.Fatalf("expected ErrEventOutOfBounds for tick 0 event at end, got %v", err)
 	}
 }

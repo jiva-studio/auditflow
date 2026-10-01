@@ -448,7 +448,7 @@ func collectBatchEvents(ctx context.Context, h *streamHeap, batch *events.TickBa
 		minStream := (*h)[0]
 		ts := minStream.currEv.GetTimestamp()
 
-		if ts.Before(currStart) {
+		if batch.TickIndex > 0 && ts.Before(currStart) {
 			if err := advanceMinStream(h); err != nil {
 				return err
 			}
@@ -459,12 +459,71 @@ func collectBatchEvents(ctx context.Context, h *streamHeap, batch *events.TickBa
 			break
 		}
 
-		_ = batch.Add(minStream.currEv)
+		if err := batch.Add(minStream.currEv); err != nil {
+			return err
+		}
 		if err := advanceMinStream(h); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func initStreamHeap(streams []*eventStream) *streamHeap {
+	h := &streamHeap{}
+	for _, st := range streams {
+		if st.currEv != nil {
+			*h = append(*h, st)
+		}
+	}
+	heap.Init(h)
+	return h
+}
+
+func emitTrailingBatch(
+	ctx context.Context,
+	h *streamHeap,
+	tickIdx int,
+	currStart time.Time,
+	tickCh chan<- events.TickBatch,
+) error {
+	if h.Len() == 0 {
+		return nil
+	}
+
+	finalStart := currStart
+	finalEnd := finalStart.Add(time.Second)
+
+	batch, err := events.NewTickBatch(tickIdx, finalStart, finalEnd)
+	if err != nil {
+		return err
+	}
+
+	for h.Len() > 0 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		minStream := (*h)[0]
+		ts := minStream.currEv.GetTimestamp()
+		if !ts.Before(batch.EndTime) {
+			batch.EndTime = ts.Add(time.Second)
+		}
+
+		if err := batch.Add(minStream.currEv); err != nil {
+			return err
+		}
+		if err := advanceMinStream(h); err != nil {
+			return err
+		}
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case tickCh <- batch:
+		return nil
+	}
 }
 
 func (s *TarGzEventSource) streamKWayMerge(
@@ -484,14 +543,7 @@ func (s *TarGzEventSource) streamKWayMerge(
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	h := &streamHeap{}
-	for _, st := range streams {
-		if st.currEv != nil {
-			*h = append(*h, st)
-		}
-	}
-	heap.Init(h)
-
+	h := initStreamHeap(streams)
 	currStart := meta.TimeRange.Start
 	endedAt := meta.TimeRange.End
 	tickIdx := 0
@@ -522,6 +574,10 @@ func (s *TarGzEventSource) streamKWayMerge(
 
 		currStart = currEnd
 		tickIdx++
+	}
+
+	if err := emitTrailingBatch(ctx, h, tickIdx, currStart, tickCh); err != nil {
+		errCh <- err
 	}
 }
 
