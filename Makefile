@@ -109,5 +109,8 @@ streamer_e2e_test:
 agent_e2e_test:
 	$(MAKE) -C tests/e2e/agent test
 
-e2e_test: streamer_e2e_test agent_e2e_test
+server_e2e_test:
+	$(MAKE) -C tests/e2e/server test
+
+e2e_test: streamer_e2e_test agent_e2e_test server_e2e_test
 

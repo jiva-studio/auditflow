@@ -50,6 +50,16 @@ func GetAgentBin(t *testing.T) string {
 	return filepath.Join(FindProjectRoot(t), "bin", "agent")
 }
 
+// GetServerBin returns the path to the compiled server binary
+func GetServerBin(t *testing.T) string {
+	t.Helper()
+	binPath := os.Getenv("SERVER_BIN")
+	if binPath != "" {
+		return binPath
+	}
+	return filepath.Join(FindProjectRoot(t), "bin", "server")
+}
+
 // GetRulesPath returns the path to data/rules.json
 func GetRulesPath(t *testing.T) string {
 	t.Helper()
