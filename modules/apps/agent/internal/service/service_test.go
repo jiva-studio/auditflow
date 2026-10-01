@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -407,4 +408,58 @@ func TestService_ProcessTick_LeftHandedMouseClicks(t *testing.T) {
 	if p.Employee != "emp-lefty" || p.Rule != "forwarded-email" || p.Title != "Forwarded email" || p.Body != "Opened: FW: Left-Handed Click Test" {
 		t.Errorf("unexpected popup details: %+v", p)
 	}
+}
+
+func runChaosBatch(workerID int, acts, btns, ccs []string) events.TickBatch {
+	now := time.Now().UTC().Add(time.Duration(workerID) * time.Minute)
+	batch, _ := events.NewTickBatch(workerID, now, now.Add(time.Second))
+	_ = batch.Add(events.OCREvent{
+		Timestamp:  now,
+		DisplayID:  workerID % 3,
+		Resolution: geometry.Size{Width: 3840, Height: 2160},
+		Blocks: []display.OCRTextBlock{{
+			Text: fmt.Sprintf("FW: Chaos %d \u200b 💣", workerID),
+			Box:  geometry.Rectangle{X: -500 + workerID*10, Y: -500 + workerID*10, Width: 300, Height: 40},
+		}},
+	})
+	_ = batch.Add(events.WindowEvent{
+		Timestamp:   now.Add(5 * time.Millisecond),
+		ProcessName: "OUTLOOK.EXE",
+		WindowTitle: fmt.Sprintf("Inbox - Outlook \u200b [%d] 🔥", workerID),
+	})
+	for j := 0; j < len(acts); j++ {
+		_ = batch.Add(events.MouseEvent{
+			Timestamp:   now.Add(time.Duration(10+j) * time.Millisecond),
+			Action:      acts[(workerID+j)%len(acts)],
+			Button:      btns[(workerID+j*2)%len(btns)],
+			ClickCount:  ccs[(workerID+j*3)%len(ccs)],
+			Position:    geometry.Point{X: -9999 + workerID*100 + j, Y: -9999 + workerID*50 + j},
+			ProcessName: "OUTLOOK.EXE",
+		})
+	}
+	return batch
+}
+
+func TestService_ChaosAndStress(t *testing.T) {
+	client := &mockAuditClient{}
+	rls := sampleTestRules(t)
+	svc, err := NewService("emp-chaos", desktop.NewState(), rls, client)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	acts := []string{"click", "CLICK", "mousedown", "move", "drag", "scroll", "", "\u200b", "🔥"}
+	btns := []string{"primary", "PRIMARY", "main", "left", "right", "middle", "", "\u200b", "🚀"}
+	ccs := []string{"1", "single", "double", "0", "none", "", "triple"}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(wID int) {
+			defer wg.Done()
+			b := runChaosBatch(wID, acts, btns, ccs)
+			_ = svc.ProcessTick(context.Background(), b)
+		}(i)
+	}
+	wg.Wait()
 }
