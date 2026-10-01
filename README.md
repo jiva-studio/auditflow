@@ -1,6 +1,6 @@
-# AuditFlow — Real-Time Telemetry & Compliance Platform
+# AuditFlow — Real-Time Telemetry & Contextual Notification Platform
 
-AuditFlow is a distributed, real-time employee workstation telemetry and compliance audit platform. It ingests desktop activity streams (active windows, OCR text, mouse clicks, clipboard contents, and process events), evaluates security and compliance rules locally on employee endpoints with sub-millisecond latency, and aggregates verified compliance audit notifications into a central audit repository.
+AuditFlow is a distributed, real-time desktop telemetry and contextual notification platform. It ingests desktop activity streams (active windows, OCR text, mouse clicks, clipboard contents, and process events), evaluates triggering rules locally on employee endpoints with sub-millisecond latency, and aggregates recorded popup notifications into a central repository.
 
 ---
 
@@ -21,12 +21,12 @@ By default, the replay streamer respects the simulated workstation tick cadence 
 TICK_MS=0 docker compose up --abort-on-container-exit --exit-code-from runner
 ```
 
-### Querying Compliance Audit Results
+### Querying Popup Audit Results
 
 Once the containers are running, the Central Audit Server exposes a REST API on port `8080`:
 
 ```bash
-# Retrieve all recorded compliance popup events
+# Retrieve all recorded popup events
 curl -s http://localhost:8080/audit
 
 # Filter audit logs by specific employee
@@ -106,7 +106,7 @@ assessment/
 │   │   │   ├── internal/ports/      # Driving and driven interfaces
 │   │   │   ├── internal/service/    # Application use cases
 │   │   │   └── internal/adapters/   # HTTP handlers, mappers, audit clients
-│   │   ├── server/                  # Central compliance audit store & query API
+│   │   ├── server/                  # Central popup store & query API
 │   │   │   ├── cmd/                 # Application entrypoint
 │   │   │   ├── internal/ports/      # Driving and driven interfaces
 │   │   │   ├── internal/service/    # Audit aggregation logic
@@ -118,7 +118,7 @@ assessment/
 │   │       └── internal/adapters/   # Tar.gz archive parser, Protobuf client
 │   └── libs/                        # Reusable foundational libraries
 │       ├── domain/                  # Pure DDD models & invariants (Zero I/O, Zero JSON)
-│       │   ├── audit/               # Audit Popup aggregate and query filters
+│       │   ├── audit/               # Popup aggregate and query filters
 │       │   ├── desktop/             # Desktop state, window hierarchies, bounds
 │       │   ├── display/             # Physical displays, coordinates, DPI scaling
 │       │   ├── events/              # Low-level workstation domain events
@@ -147,11 +147,13 @@ assessment/
 
 ## 4. Architectural Decisions
 
-1. **[ADR-0001: Clean & Hexagonal Architecture](docs/adr/0001-clean-and-hexagonal-architecture.md)** — Decouples pure domain logic from transports (HTTP/Protobuf) and storage, allowing adapters and databases to be swapped or mocked without touching business logic.
-2. **[ADR-0002: Domain-Driven Design & Zero I/O in Domain](docs/adr/0002-domain-driven-design.md)** — Enforces strict invariants and immutable value objects (`Point`, `Rectangle`, `Popup`) with zero external dependencies, zero JSON tags, and zero I/O in the domain.
-3. **[ADR-0003: Protobuf for Inter-Service Communication](docs/adr/0003-protobuf-for-inter-service-communication.md)** — Provides strongly-typed inter-service contracts and cuts network serialization overhead and allocations by >70% compared to JSON during high-frequency telemetry streaming.
-4. **[ADR-0004: Comprehensive Testing Strategy & Gremlins Mutation Testing](docs/adr/0004-testing-strategy-and-mutation-testing.md)** — Combines unit tests for domain invariants, black-box E2E tests over real recordings with bounded memory (`GOMEMLIMIT`), and Gremlins mutation testing to verify test effectiveness.
-5. **[ADR-0005: Automated Architectural Fitness Functions](docs/adr/0005-automated-architectural-fitness-functions.md)** — Automatically prevents architectural erosion via AST guards in pre-commit hooks and CI, prohibiting forbidden imports (`os`, `io`, `encoding/json`) in pure packages.
+1. **[ADR-0001: Clean and Hexagonal Architecture](docs/adr/0001-clean-and-hexagonal-architecture.md)** — Combines Clean Architecture dependency inversion and Hexagonal Ports & Adapters to decouple domain logic from transports and persistence.
+2. **[ADR-0002: Domain-Driven Design](docs/adr/0002-domain-driven-design.md)** — Models workstation state as an aggregate root (`desktop.State`) partitioned into cohesive facets (`SpatialFacet`, `WindowFacet`, `ClipboardFacet`).
+3. **[ADR-0003: Specification Pattern](docs/adr/0003-specification-pattern.md)** — Expresses dynamic notification rules as composable predicates (`TextSpec`, `WindowSpec`, `ClipboardSpec`, `ClickSpec`).
+4. **[ADR-0004: Protocol Buffers](docs/adr/0004-protocol-buffers.md)** — Schema-first binary contracts (Protobuf v3) for high-frequency inter-service streaming over HTTP.
+5. **[ADR-0005: Testing Strategy](docs/adr/0005-testing-strategy.md)** — Multi-tier testing pyramid combining pure domain unit tests, adapter tests with race detection, and blackbox E2E replay pipelines.
+6. **[ADR-0006: Mutation Testing](docs/adr/0006-mutation-testing.md)** — AST-level mutation testing via Gremlins to eliminate phantom code coverage and verify assertion quality.
+7. **[ADR-0007: Architectural Fitness Functions](docs/adr/0007-architectural-fitness-functions.md)** — Automated AST guards (`no_io.py`, `no_json.py`) and static complexity lint gates in CI.
 
 ---
 

@@ -38,7 +38,7 @@ flowchart TD
 * **Message Broker**: Buffers high-throughput bursts (e.g., morning login spikes) and partitions events by `employee_id` to guarantee in-order event processing without database overload.
 * **Dual Database Layer**:
   * **Audit Database (Columnar/Time-Series)**: High-throughput batch writes and sub-second analytical search across billions of historical audit popups.
-  * **Config Database (Relational/ACID)**: Transactional storage for company accounts, user access, device registry, and versioned compliance rules.
+  * **Config Database (Relational/ACID)**: Transactional storage for company accounts, user access, device registry, and versioned notification rules.
 * **Central API Server & Web Dashboard**: Decouples UI presentation from storage engines, handles user authentication, serves audit queries, and orchestrates live rule updates.
 
 ---
@@ -61,7 +61,7 @@ flowchart TD
 * [ ] **Config Database**: Store company accounts, employee directory records, device registrations, and versioned rule definitions in a relational database with ACID transactional guarantees.
 
 ### 4. Dynamic Rule Management & Web Dashboard
-* [ ] **Central Rule Management Service**: Create an API service to validate, version, and manage compliance rules with syntax and ReDoS checks.
+* [ ] **Central Rule Management Service**: Create an API service to validate, version, and manage notification rules with syntax and ReDoS checks.
 * [ ] **Zero-Downtime Rule Hot-Reloading**: Push updated rules to running agents via gRPC/WebSocket, swapping rule trees atomically in memory (`atomic.Pointer`) without process restart or dropped ticks.
 * [ ] **Web Dashboard**: Provide a web interface to inspect audit popups, filter by employee or rule, view statistics, and edit active rules.
 
@@ -108,7 +108,7 @@ flowchart TD
 A realistic calculation of system throughput confirms that the **Edge-Computing architecture** offloads heavy processing to endpoints, keeping backend infrastructure lean and cost-effective:
 
 1. **Audit Popups Emission Rate**:
-   * Compliance rules trigger selectively upon specific employee actions (e.g. copying an invoice number, deleting a CRM record).
+   * Contextual notification rules trigger selectively upon specific employee actions (e.g. copying an invoice number, deleting a CRM record).
    * Assuming an active employee triggers an average of **6 popups per hour**:
      * Throughput: `(10,000 users * 6 popups) / 3,600 sec ≈ 16.6 RPS (Requests Per Second)`.
      * Network Bandwidth: `16.6 RPS * ~120 bytes (Protobuf frame) ≈ 2.0 KB/sec`.
