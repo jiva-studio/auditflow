@@ -164,4 +164,17 @@ The automated [GitHub Actions CI](.github/workflows/ci.yml) workflow enforces qu
 * **Stage 3: End-to-End System Tests**: Executes the full integration test pipeline across Streamer, Agent, and Server.
 * **Stage 4: Binary Compilation & Docker Packaging**: Statically compiles Go binaries (`bin/server`, `bin/agent`, `bin/streamer`), uploads them as downloadable workflow artifacts, and verifies multi-stage Docker image builds.
 
+---
+
+## 6. Part 2: Production Scaling & Team Rollout Plan
+
+The complete plan for shipping AuditFlow to thousands of employees across enterprise clients is documented in detail in **[TODO.md](TODO.md)**. Key highlights include:
+
+* **Target Production Architecture**: Stateless Go ingestion gateways, Protobuf contracts, Kafka/Redpanda broker partitioning by `employee_id`, and dual storage (ClickHouse for audit logs + PostgreSQL for configs).
+* **Workload & Capacity Math**: Detailed throughput and bandwidth modeling proving edge rule evaluation comfortably scales to 10,000+ endpoints with minimal backend infrastructure.
+* **Endpoint Hardening & Privacy**: Native OS services (systemd, Windows Service, LaunchDaemon), offline SQLite (WAL) buffering, and client-side PII regex/Luhn sanitization.
+* **Canary Deployment Rings**: 4-stage rollout strategy (Internal -> 5% -> 25% -> 100%) with automated crash-rate rollbacks and signed enterprise packages (MSI/PKG/DEB).
+* **Team Workstreams & Ownership**: Cross-functional team structure spanning 5 dedicated tracks (*Agent Core*, *Ingestion Platform*, *Identity & Auth*, *Rules & Detection*, and *Product UI*).
+
+
 
